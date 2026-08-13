@@ -69,7 +69,12 @@ export function BudgetHero({ status, onSwitch }: BudgetHeroProps) {
       </div>
 
       <div className="mt-4">
-        <ProgressBar percent={percentUsed} color={color} paceMarker={percentTime * 100} />
+        <ProgressBar
+          percent={percentUsed}
+          color={color}
+          paceMarker={percentTime * 100}
+          paceLabel={status.phase === 'active' ? 'Today' : undefined}
+        />
       </div>
 
       <div className="mt-4 flex items-end justify-between border-t border-hairline pt-3.5">

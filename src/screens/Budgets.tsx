@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ProgressBar } from '../components/ProgressBar'
 import { SyncDot } from '../components/SyncDot'
 import { BudgetSheet } from './BudgetSheet'
@@ -21,16 +21,6 @@ export function Budgets({ createOpen, onCreateOpenChange }: BudgetsProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const orderRef = useRef<string[] | null>(null)
   const draggingIdRef = useRef<string | null>(null)
-  const gestureRef = useRef<{
-    id: string
-    pointerId: number
-    startX: number
-    startY: number
-    target: HTMLButtonElement
-  } | null>(null)
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const suppressClickRef = useRef(false)
-  const touchMoveBlockerRef = useRef<((event: TouchEvent) => void) | null>(null)
 
   const statusById = new Map(statuses.map((status) => [status.budget.id, status]))
   const displayedStatuses = draftOrder
@@ -43,80 +33,20 @@ export function Budgets({ createOpen, onCreateOpenChange }: BudgetsProps) {
       ]
     : statuses
 
-  function clearLongPressTimer() {
-    if (longPressTimerRef.current !== null) {
-      clearTimeout(longPressTimerRef.current)
-      longPressTimerRef.current = null
-    }
+  function startReorder(id: string, event: ReactPointerEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+
+    const order = displayedStatuses.map((status) => status.budget.id)
+    orderRef.current = order
+    draggingIdRef.current = id
+    setDraftOrder(order)
+    setDraggingId(id)
   }
 
-  function stopBlockingTouchMove() {
-    const blocker = touchMoveBlockerRef.current
-    if (blocker) document.removeEventListener('touchmove', blocker)
-    touchMoveBlockerRef.current = null
-  }
-
-  useEffect(
-    () => () => {
-      clearLongPressTimer()
-      stopBlockingTouchMove()
-    },
-    [],
-  )
-
-  function beginPress(id: string, event: ReactPointerEvent<HTMLButtonElement>) {
-    if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
-
-    clearLongPressTimer()
-    suppressClickRef.current = false
-    gestureRef.current = {
-      id,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      target: event.currentTarget,
-    }
-
-    longPressTimerRef.current = setTimeout(() => {
-      const gesture = gestureRef.current
-      if (!gesture || gesture.id !== id) return
-
-      const order = displayedStatuses.map((status) => status.budget.id)
-      orderRef.current = order
-      draggingIdRef.current = id
-      suppressClickRef.current = true
-      setDraftOrder(order)
-      setDraggingId(id)
-
-      try {
-        gesture.target.setPointerCapture(gesture.pointerId)
-      } catch {
-        // The pointer can disappear between the timer firing and capture.
-      }
-
-      const blocker = (touchEvent: TouchEvent) => touchEvent.preventDefault()
-      touchMoveBlockerRef.current = blocker
-      document.addEventListener('touchmove', blocker, { passive: false })
-      navigator.vibrate?.(8)
-    }, 380)
-  }
-
-  function movePress(event: ReactPointerEvent<HTMLButtonElement>) {
-    const gesture = gestureRef.current
-    if (!gesture || gesture.pointerId !== event.pointerId) return
-
-    if (!draggingIdRef.current) {
-      const moved = Math.hypot(
-        event.clientX - gesture.startX,
-        event.clientY - gesture.startY,
-      )
-      if (moved > 10) {
-        clearLongPressTimer()
-        suppressClickRef.current = true
-      }
-      return
-    }
-
+  function moveReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!draggingIdRef.current) return
     event.preventDefault()
     if (event.clientY < 120) window.scrollBy(0, -10)
     if (event.clientY > window.innerHeight - 140) window.scrollBy(0, 10)
@@ -140,35 +70,37 @@ export function Budgets({ createOpen, onCreateOpenChange }: BudgetsProps) {
     setDraftOrder(next)
   }
 
-  async function endPress(event: ReactPointerEvent<HTMLButtonElement>) {
-    const gesture = gestureRef.current
-    if (!gesture || gesture.pointerId !== event.pointerId) return
-
-    clearLongPressTimer()
-    gestureRef.current = null
-    const wasDragging = draggingIdRef.current !== null
-
+  async function finishReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!draggingIdRef.current) return
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
 
-    if (wasDragging) {
-      event.preventDefault()
-      const order = orderRef.current
-      draggingIdRef.current = null
-      setDraggingId(null)
-      stopBlockingTouchMove()
-      try {
-        if (order) await reorderBudgets(order)
-      } finally {
-        orderRef.current = null
-        setDraftOrder(null)
-      }
+    event.preventDefault()
+    event.stopPropagation()
+    const order = orderRef.current
+    draggingIdRef.current = null
+    setDraggingId(null)
+    try {
+      if (order) await reorderBudgets(order)
+    } finally {
+      orderRef.current = null
+      setDraftOrder(null)
     }
+  }
 
-    setTimeout(() => {
-      suppressClickRef.current = false
-    }, 0)
+  async function moveWithKeyboard(id: string, direction: -1 | 1) {
+    const order = displayedStatuses.map((status) => status.budget.id)
+    const from = order.indexOf(id)
+    const to = from + direction
+    if (from < 0 || to < 0 || to >= order.length) return
+    ;[order[from], order[to]] = [order[to], order[from]]
+    setDraftOrder(order)
+    try {
+      await reorderBudgets(order)
+    } finally {
+      setDraftOrder(null)
+    }
   }
 
   return (
@@ -210,12 +142,13 @@ export function Budgets({ createOpen, onCreateOpenChange }: BudgetsProps) {
               status={status}
               index={i}
               dragging={draggingId === status.budget.id}
-              onEdit={() => {
-                if (!suppressClickRef.current) setEditing(status.budget)
-              }}
-              onPointerDown={(event) => beginPress(status.budget.id, event)}
-              onPointerMove={movePress}
-              onPointerEnd={(event) => void endPress(event)}
+              onEdit={() => setEditing(status.budget)}
+              onReorderStart={(event) => startReorder(status.budget.id, event)}
+              onReorderMove={moveReorder}
+              onReorderEnd={(event) => void finishReorder(event)}
+              onReorderKey={(direction) =>
+                void moveWithKeyboard(status.budget.id, direction)
+              }
             />
           ))
         )}
@@ -250,44 +183,40 @@ function BudgetCard({
   index,
   dragging,
   onEdit,
-  onPointerDown,
-  onPointerMove,
-  onPointerEnd,
+  onReorderStart,
+  onReorderMove,
+  onReorderEnd,
+  onReorderKey,
 }: {
   status: BudgetStatus
   index: number
   dragging: boolean
   onEdit: () => void
-  onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void
-  onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void
-  onPointerEnd: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onReorderStart: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onReorderMove: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onReorderEnd: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onReorderKey: (direction: -1 | 1) => void
 }) {
   const { budget, remaining, percentUsed, percentTime, dailyAllowance, phase } = status
   const color = STATE_COLOR[status.state]
   const repeat = repeatLabel(budget)
 
   return (
-    <button
-      type="button"
+    <div
       data-budget-id={budget.id}
-      onClick={onEdit}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerEnd}
-      onPointerCancel={onPointerEnd}
-      onContextMenu={(event) => event.preventDefault()}
       className={[
-        'animate-rise-in block w-full touch-pan-y select-none rounded-[var(--radius-card)]',
-        'bg-surface px-5 py-4 text-left transition-[transform,box-shadow,opacity] duration-150',
-        'active:bg-surface-2',
+        'animate-rise-in relative w-full rounded-[var(--radius-card)] bg-surface',
+        'transition-[transform,box-shadow] duration-150',
         dragging ? 'relative z-10 scale-[1.015] bg-surface-2 shadow-2xl' : '',
       ].join(' ')}
-      style={{
-        animationDelay: `${Math.min(index, 6) * 35}ms`,
-        WebkitTouchCallout: 'none',
-      }}
+      style={{ animationDelay: `${Math.min(index, 6) * 35}ms` }}
     >
-      <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={onEdit}
+        className="block w-full rounded-[var(--radius-card)] px-5 py-4 text-left active:bg-surface-2"
+      >
+      <div className="flex items-center gap-2 pr-7">
         <span className="text-[15px] font-medium">{budget.name}</span>
         {repeat && (
           <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10.5px] text-faint">
@@ -323,7 +252,12 @@ function BudgetCard({
       </div>
 
       <div className="mt-3.5">
-        <ProgressBar percent={percentUsed} color={color} paceMarker={percentTime * 100} />
+        <ProgressBar
+          percent={percentUsed}
+          color={color}
+          paceMarker={percentTime * 100}
+          paceLabel={phase === 'active' ? 'Today' : undefined}
+        />
       </div>
 
       <div className="mt-2.5 flex items-center justify-between text-[11.5px] text-faint">
@@ -346,6 +280,42 @@ function BudgetCard({
           </span>
         </div>
       )}
-    </button>
+      </button>
+
+      <button
+        type="button"
+        aria-label={`Reorder ${budget.name}`}
+        aria-roledescription="sortable"
+        onPointerDown={onReorderStart}
+        onPointerMove={onReorderMove}
+        onPointerUp={onReorderEnd}
+        onPointerCancel={onReorderEnd}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            onReorderKey(-1)
+          }
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            onReorderKey(1)
+          }
+        }}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+        className="absolute top-2.5 right-3 flex h-8 w-7 cursor-grab touch-none items-center justify-center rounded-lg text-faint active:cursor-grabbing active:bg-surface-3"
+        style={{ touchAction: 'none' }}
+      >
+        <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden>
+          <circle cx="3" cy="3" r="1.1" />
+          <circle cx="9" cy="3" r="1.1" />
+          <circle cx="3" cy="8" r="1.1" />
+          <circle cx="9" cy="8" r="1.1" />
+          <circle cx="3" cy="13" r="1.1" />
+          <circle cx="9" cy="13" r="1.1" />
+        </svg>
+      </button>
+    </div>
   )
 }

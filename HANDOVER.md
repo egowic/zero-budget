@@ -249,10 +249,16 @@ Safari sekmesinde hem de mevcut Ana Ekran PWA'sında gerçek cihaz testi yapılm
 - Budgets kartındaki yüzde daha sonra tarihlerin arasından kaldırılıp Activity
   kartındakiyle aynı şekilde `spent of total` satırının sağına taşındı; iki kartın
   bilgi hiyerarşisi eşitlendi.
-- Budgets ekranındaki kartlar, görünür bir handle veya ikon eklenmeden uzun basıp
-  yukarı/aşağı sürüklenerek sıralanabilir. Kısa dokunuş edit davranışını, normal
-  dikey swipe sayfa kaydırmasını korur. Sıra `meta.budgetOrder` içinde cihaz-local
-  bir görünüm tercihi olarak tutulur; bütçe satırları ve Supabase şeması değişmez.
+- Budgets ekranındaki ilk uzun-bas/sürükle yaklaşımı yeterince smooth bulunmadığı
+  için kaldırıldı. Kartların sağ üstündeki küçük altı noktalı tutamaç yalnızca
+  sürükleme işini yapar; kartın geri kalanı doğrudan edit ekranını açar. Sıra
+  `meta.budgetOrder` içinde cihaz-local bir görünüm tercihi olarak tutulur; bütçe
+  satırları ve Supabase şeması değişmez.
+- Activity ve Budgets progress bar'larında aktif bütçenin pace çizgisi üzerinde
+  minimal `Today` etiketi bulunur. Etiket için barın üstünde ayrı 13 px alan ayrılır
+  ve yatay konumu kart kenarları içinde clamp edilir; tutar/yüzde satırlarıyla
+  çakışmaz. Upcoming ve ended bütçelerde etiket gösterilmez. Harcanan yüzde barın
+  içine taşınmadı; mevcut spent/total satırının sağında kaldı.
 - Bu geliştirmeler yalnızca web/PWA reposuna yapıldı; ayrı native iOS repo bu
   iterasyonda değiştirilmedi.
 
