@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Sheet } from '../components/Sheet'
 import { downloadBackup, restoreBackup } from '../sync/backup'
-import { attachRecoveryEmail, hasRecoveryEmail } from '../sync/auth'
+import { attachRecoveryEmail, hasRecoveryEmail, recoverWithEmail } from '../sync/auth'
 import { isSyncConfigured } from '../sync/client'
 import { sync } from '../sync/engine'
 import { describeSync, useSyncStatus } from '../sync/useSyncStatus'
@@ -24,6 +24,7 @@ export function SettingsSheet({ open, onClose, onOpenCategories }: SettingsSheet
   const status = useSyncStatus()
   const [recovered, setRecovered] = useState<boolean | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [recoveryLoginOpen, setRecoveryLoginOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -31,6 +32,7 @@ export function SettingsSheet({ open, onClose, onOpenCategories }: SettingsSheet
     if (!open) return
     setNotice(null)
     setFormOpen(false)
+    setRecoveryLoginOpen(false)
     void hasRecoveryEmail().then(setRecovered)
   }, [open])
 
@@ -114,6 +116,16 @@ export function SettingsSheet({ open, onClose, onOpenCategories }: SettingsSheet
                 Recovery is set up. Signing in with that email on a new device
                 brings everything back.
               </div>
+            ) : recoveryLoginOpen ? (
+              <RecoveryLoginForm
+                onCancel={() => setRecoveryLoginOpen(false)}
+                onDone={(message) => {
+                  setNotice(message)
+                  setRecoveryLoginOpen(false)
+                  void sync()
+                  void hasRecoveryEmail().then(setRecovered)
+                }}
+              />
             ) : formOpen ? (
               <RecoveryForm
                 onDone={(message) => {
@@ -126,6 +138,11 @@ export function SettingsSheet({ open, onClose, onOpenCategories }: SettingsSheet
               <>
                 <div className="overflow-hidden rounded-2xl bg-surface-2">
                   <Row label="Add a recovery email" onClick={() => setFormOpen(true)} />
+                  <Row
+                    label="Recover existing data"
+                    onClick={() => setRecoveryLoginOpen(true)}
+                    divided
+                  />
                 </div>
                 <p className="mt-2 px-1 text-[11.5px] leading-relaxed text-faint">
                   Optional, and you will not be asked again. Without it, deleting the
@@ -144,6 +161,77 @@ export function SettingsSheet({ open, onClose, onOpenCategories }: SettingsSheet
         )}
       </div>
     </Sheet>
+  )
+}
+
+function RecoveryLoginForm({
+  onCancel,
+  onDone,
+}: {
+  onCancel: () => void
+  onDone: (message: string) => void
+}) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const valid = /.+@.+\..+/.test(email) && password.length >= 8
+
+  async function submit() {
+    if (!valid || busy) return
+    setBusy(true)
+    setError(null)
+    const result = await recoverWithEmail(email, password)
+    setBusy(false)
+    if (result.ok) {
+      onDone('Signed in. Restoring your data now…')
+    } else {
+      setError(result.message)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+        autoComplete="username"
+        className="w-full rounded-2xl bg-surface-2 px-4 py-3.5 text-[15px] outline-none placeholder:text-faint"
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+        autoComplete="current-password"
+        className="w-full rounded-2xl bg-surface-2 px-4 py-3.5 text-[15px] outline-none placeholder:text-faint"
+      />
+      {error && <p className="px-1 text-[12px] text-over">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="h-[48px] flex-1 rounded-2xl bg-surface-2 text-[15px] text-muted"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!valid || busy}
+          className={[
+            'h-[48px] flex-1 rounded-2xl text-[15px] font-medium transition-all',
+            valid && !busy ? 'bg-accent text-ink' : 'bg-surface-2 text-faint',
+          ].join(' ')}
+        >
+          {busy ? 'Signing in…' : 'Recover'}
+        </button>
+      </div>
+    </div>
   )
 }
 

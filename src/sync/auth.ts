@@ -71,6 +71,22 @@ export async function attachRecoveryEmail(
   return { ok: true }
 }
 
+/** Signs a replacement device into an account that has recovery credentials. */
+export async function recoverWithEmail(
+  email: string,
+  password: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!supabase) return { ok: false, message: 'Sync is not configured.' }
+
+  try {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) return { ok: false, message: error.message }
+    return { ok: true }
+  } catch {
+    return { ok: false, message: 'No connection. Try again later.' }
+  }
+}
+
 /** Whether this account can be recovered on another device. */
 export async function hasRecoveryEmail(): Promise<boolean> {
   if (!supabase) return false
