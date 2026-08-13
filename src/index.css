@@ -1,0 +1,156 @@
+@import 'tailwindcss';
+
+/* ─────────────────────────────────────────────────────────────
+   Design tokens
+
+   Dark-only by intent. The ground is a cool near-black rather
+   than pure black, so elevated surfaces have somewhere to go and
+   the OLED panel does not smear while scrolling.
+
+   Colour is functional, never decorative. Primary actions are a
+   warm off-white — restraint reads as expensive, and it leaves
+   saturated colour free to mean exactly one thing: the state of
+   a budget.
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  --color-ink: #09090c;
+  --color-surface: #131318;
+  --color-surface-2: #1b1b21;
+  --color-surface-3: #24242c;
+
+  --color-hairline: rgba(255, 255, 255, 0.06);
+  --color-hairline-strong: rgba(255, 255, 255, 0.11);
+
+  --color-text: #f7f7f8;
+  --color-muted: #9a9aa6;
+  --color-faint: #5e5e6a;
+
+  /* Primary action */
+  --color-accent: #efede8;
+
+  /* Budget state — on track / watch / over */
+  --color-good: #6ed3a5;
+  --color-good-dim: rgba(110, 211, 165, 0.13);
+  --color-warn: #e3b25e;
+  --color-warn-dim: rgba(227, 178, 94, 0.13);
+  --color-over: #e8695f;
+  --color-over-dim: rgba(232, 105, 95, 0.13);
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui,
+    sans-serif;
+
+  --radius-card: 18px;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-ink);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    /* Kill the iOS rubber-band bounce so this does not feel like a page */
+    overscroll-behavior-y: none;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  input,
+  textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Native date pickers ship a light-on-light glyph in dark mode */
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(0.6);
+  }
+}
+
+@layer utilities {
+  /* Amounts must never jitter as digits change */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    scrollbar-width: none;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-sheet-in {
+  animation: sheet-in 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+.animate-rise-in {
+  animation: rise-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet-in,
+  .animate-fade-in,
+  .animate-rise-in {
+    animation: none;
+  }
+}
