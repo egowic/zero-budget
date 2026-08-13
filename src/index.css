@@ -94,10 +94,21 @@
   }
 
   .safe-top {
-    padding-top: env(safe-area-inset-top);
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  /* Safe-area padding and the screen's intentional spacing must add together.
+     Separate utilities target the same property, so one would otherwise win. */
+  .safe-top.pt-3 {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
   }
   .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-bottom.pb-2 {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+  }
+  .safe-bottom.pb-4 {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
   }
 
   .hide-scrollbar::-webkit-scrollbar {
