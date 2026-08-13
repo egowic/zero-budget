@@ -1,5 +1,5 @@
 import { supabase } from './client'
-import { ensureSession } from './auth'
+import { currentUserId, ensureSession } from './auth'
 import { db, getMeta, setMeta, type Budget, type Category, type Expense } from '../db/schema'
 
 /**
@@ -27,8 +27,9 @@ export interface SyncStatus {
 type Table = 'budgets' | 'expenses' | 'categories'
 const TABLES: Table[] = ['categories', 'budgets', 'expenses']
 
-const CURSOR_KEY = 'syncCursor'
+const CURSOR_KEY_PREFIX = 'syncCursor:'
 const LAST_SYNCED_KEY = 'lastSyncedAt'
+const PAGE_SIZE = 1000
 
 // ── Status broadcasting ─────────────────────────────────────────────────────
 
@@ -156,7 +157,9 @@ async function push(userId: string): Promise<void> {
       .map((row) => toRemote(table, row, userId))
 
     if (payload.length > 0) {
-      const { error } = await supabase!.from(table).upsert(payload)
+      const { error } = await supabase!
+        .from(table)
+        .upsert(payload, { onConflict: 'user_id,id' })
       if (error) throw error
     }
 
@@ -169,39 +172,50 @@ async function push(userId: string): Promise<void> {
 // ── Pull ────────────────────────────────────────────────────────────────────
 
 async function pull(): Promise<void> {
-  const cursor = await getMeta<string>(CURSOR_KEY, '1970-01-01T00:00:00Z')
-  let newest = cursor
-
   for (const table of TABLES) {
-    const { data, error } = await supabase!
-      .from(table)
-      .select('*')
-      .gt('updated_at', cursor)
-      .order('updated_at', { ascending: true })
-      .limit(1000)
+    const cursorKey = `${CURSOR_KEY_PREFIX}${table}`
+    const cursor = await getMeta<string>(cursorKey, '1970-01-01T00:00:00Z')
+    let newest = cursor
+    let offset = 0
 
-    if (error) throw error
-    if (!data || data.length === 0) continue
+    while (true) {
+      const { data, error } = await supabase!
+        .from(table)
+        .select('*')
+        .gt('updated_at', cursor)
+        .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1)
 
-    const incoming = data.map((row) => ({ row, mapped: fromRemote(table, row) }))
+      if (error) throw error
+      if (!data || data.length === 0) break
 
-    await db.transaction('rw', db.table(table), async () => {
-      for (const { mapped } of incoming) {
-        const local = await db.table(table).get(mapped.id)
-        // Last write wins. A local row that is strictly newer is a change the
-        // server has not seen yet; it is sitting in the outbox and would be
-        // destroyed by blindly overwriting it here.
-        if (local && local.updatedAt > mapped.updatedAt) continue
-        await db.table(table).put(mapped)
+      const incoming = data.map((row) => ({ row, mapped: fromRemote(table, row) }))
+
+      await db.transaction('rw', db.table(table), db.outbox, async () => {
+        for (const { mapped } of incoming) {
+          // A write made while this pull was in flight must survive. It has an
+          // outbox row until the next push, which is a stronger signal than a
+          // client timestamp from a phone whose clock may be wrong.
+          const pending = await db.outbox
+            .where('[table+rowId]')
+            .equals([table, mapped.id])
+            .first()
+          if (pending) continue
+          await db.table(table).put(mapped)
+        }
+      })
+
+      for (const { row } of incoming) {
+        if (row.updated_at > newest) newest = row.updated_at
       }
-    })
 
-    for (const { row } of incoming) {
-      if (row.updated_at > newest) newest = row.updated_at
+      offset += data.length
+      if (data.length < PAGE_SIZE) break
     }
-  }
 
-  if (newest !== cursor) await setMeta(CURSOR_KEY, newest)
+    if (newest !== cursor) await setMeta(cursorKey, newest)
+  }
 }
 
 // ── Orchestration ───────────────────────────────────────────────────────────
@@ -229,9 +243,14 @@ export async function sync(): Promise<void> {
       return
     }
 
-    const userId = await ensureSession()
+    // Do not create an anonymous account just because somebody opened the
+    // deployed URL. Existing users still pull immediately; a new account is
+    // created only after a real local mutation has entered the outbox.
+    const existingUserId = await currentUserId()
+    const userId =
+      existingUserId ?? ((await db.outbox.count()) > 0 ? await ensureSession() : null)
     if (!userId) {
-      setStatus({ state: 'offline' })
+      setStatus({ state: 'idle' })
       return
     }
 

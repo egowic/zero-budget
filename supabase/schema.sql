@@ -8,7 +8,7 @@
 -- ── Tables ──────────────────────────────────────────────────────────────────
 
 create table if not exists public.categories (
-  id          uuid primary key,
+  id          uuid not null,
   user_id     uuid not null references auth.users (id) on delete cascade,
   name        text not null,
   icon        text not null default '',
@@ -16,11 +16,12 @@ create table if not exists public.categories (
   sort_order  integer not null default 0,
   deleted     boolean not null default false,
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  primary key (user_id, id)
 );
 
 create table if not exists public.budgets (
-  id          uuid primary key,
+  id          uuid not null,
   user_id     uuid not null references auth.users (id) on delete cascade,
   name        text not null,
   -- Minor units (kuruş). Integers only: floats do not reconcile.
@@ -32,11 +33,12 @@ create table if not exists public.budgets (
   archived    boolean not null default false,
   deleted     boolean not null default false,
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  primary key (user_id, id)
 );
 
 create table if not exists public.expenses (
-  id          uuid primary key,
+  id          uuid not null,
   user_id     uuid not null references auth.users (id) on delete cascade,
   amount      bigint not null,
   -- No budget reference: an expense belongs to a date, and every budget whose
@@ -46,8 +48,13 @@ create table if not exists public.expenses (
   date        date not null,
   deleted     boolean not null default false,
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  primary key (user_id, id)
 );
+
+-- The same built-in category ids intentionally exist for every user. Keeping
+-- user_id in the primary key lets those rows coexist while each client still
+-- addresses its local copy by id alone.
 
 -- Pull is a cursor scan over updated_at, per user
 create index if not exists categories_sync_idx on public.categories (user_id, updated_at);
