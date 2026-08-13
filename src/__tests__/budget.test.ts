@@ -82,8 +82,10 @@ describe('budget status', () => {
   })
 
   it('reports phases outside the period without dividing by zero', () => {
-    expect(computeStatus(budget(), 0, '2026-07-01').phase).toBe('upcoming')
-    expect(computeStatus(budget(), 0, '2026-07-01').daysElapsed).toBe(0)
+    const upcoming = computeStatus(budget(), 0, '2026-07-01')
+    expect(upcoming.phase).toBe('upcoming')
+    expect(upcoming.daysElapsed).toBe(0)
+    expect(upcoming.dailyAllowance).toBe(61_200)
 
     const ended = computeStatus(budget(), 500_000, '2026-09-01')
     expect(ended.phase).toBe('ended')

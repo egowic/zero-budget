@@ -141,7 +141,7 @@ function BudgetCard({
         <span>{formatDate(budget.endDate, { withYear: true })}</span>
       </div>
 
-      {phase === 'active' && (
+      {phase !== 'ended' && (
         <div className="mt-3 flex items-baseline justify-between border-t border-hairline pt-3 text-[12.5px]">
           {dailyAllowance === null ? (
             <span style={{ color }}>Nothing left to spend</span>
