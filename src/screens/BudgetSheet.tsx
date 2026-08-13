@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { Sheet } from '../components/Sheet'
 import { addBudget, deleteBudget, deriveEndDate, updateBudget } from '../db/mutations'
 import type { Budget, Period } from '../db/schema'
-import { formatAmount, parseAmount } from '../lib/money'
+import {
+  formatAmount,
+  formatTyping,
+  parseAmount,
+  sanitizeTyping,
+  toMajor,
+} from '../lib/money'
 import { daysBetween, formatRange, today, type IsoDate } from '../lib/dates'
 
 interface BudgetSheetProps {
@@ -31,7 +37,8 @@ export function BudgetSheet({ open, budget, onClose }: BudgetSheetProps) {
     if (!open) return
     if (budget) {
       setName(budget.name)
-      setAmountText(formatAmount(budget.amount))
+      // Raw digits, not the grouped form — the input groups it for display
+      setAmountText(String(toMajor(budget.amount)))
       setStartDate(budget.startDate)
       setPeriod(budget.period)
       setRepeats(budget.repeats === 1)
@@ -92,8 +99,9 @@ export function BudgetSheet({ open, budget, onClose }: BudgetSheetProps) {
         <div className="mt-2 flex items-center gap-2 rounded-2xl bg-surface-2 px-4 py-3.5">
           <span className="text-[20px] font-light text-faint">₺</span>
           <input
-            value={amountText}
-            onChange={(e) => setAmountText(e.target.value.replace(/[^\d.,]/g, ''))}
+            // Displayed grouped, stored raw — "30000" reads back as "30,000"
+            value={formatTyping(amountText)}
+            onChange={(e) => setAmountText(sanitizeTyping(e.target.value))}
             inputMode="decimal"
             placeholder="0"
             className="tnum w-full bg-transparent text-[20px] font-light outline-none placeholder:text-faint"

@@ -58,10 +58,29 @@ export function formatMoney(
   return `${sign}₺${formatAmount(minor, opts)}`
 }
 
-/** Compact form for dense rows: 12,5B / 1,2M. */
+/**
+ * Groups a partially-typed amount for display without disturbing what was
+ * typed: "30000" reads back as "30,000" while a trailing "." or a half-entered
+ * decimal survives untouched.
+ */
+export function formatTyping(raw: string): string {
+  const [whole, fraction] = raw.split('.')
+  const head = whole === '' || whole === undefined ? '' : wholeFormatter.format(Number(whole))
+  return fraction === undefined ? head : `${head}.${fraction}`
+}
+
+/** Strips anything that is not a digit or a single decimal point. */
+export function sanitizeTyping(input: string): string {
+  const cleaned = input.replace(/[^\d.]/g, '')
+  const [whole, ...rest] = cleaned.split('.')
+  if (rest.length === 0) return whole.slice(0, 12)
+  return `${whole.slice(0, 12)}.${rest.join('').slice(0, 2)}`
+}
+
+/** Compact form for dense rows: 12.5K / 1.2M. */
 export function formatCompact(minor: Minor): string {
   const major = Math.abs(toMajor(minor))
-  if (major >= 1_000_000) return `₺${(major / 1_000_000).toFixed(1).replace('.', ',')}M`
-  if (major >= 10_000) return `₺${(major / 1000).toFixed(1).replace('.', ',')}B`
+  if (major >= 1_000_000) return `₺${(major / 1_000_000).toFixed(1)}M`
+  if (major >= 10_000) return `₺${(major / 1000).toFixed(1)}K`
   return `₺${wholeFormatter.format(major)}`
 }

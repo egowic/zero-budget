@@ -1,25 +1,15 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Sheet } from '../components/Sheet'
 import { Keypad } from '../components/Keypad'
 import { CategoryGrid } from '../components/CategoryGrid'
-import { coveringBudgets, useBudgetStatuses, useCategories } from '../db/queries'
+import { useCategories } from '../db/queries'
 import { addExpense } from '../db/mutations'
-import { formatMoney, parseAmount } from '../lib/money'
+import { formatTyping, parseAmount } from '../lib/money'
 import { addDays, formatDate, today } from '../lib/dates'
 
 interface ExpenseSheetProps {
   open: boolean
   onClose: () => void
-}
-
-const groupFormatter = new Intl.NumberFormat('en-US')
-
-/** Formats the raw keypad buffer for display without disturbing what was typed. */
-function formatBuffer(raw: string): string {
-  if (raw === '') return '0'
-  const [whole, fraction] = raw.split('.')
-  const head = whole === '' ? '0' : groupFormatter.format(Number(whole))
-  return fraction === undefined ? head : `${head}.${fraction}`
 }
 
 export function ExpenseSheet({ open, onClose }: ExpenseSheetProps) {
@@ -31,14 +21,9 @@ export function ExpenseSheet({ open, onClose }: ExpenseSheetProps) {
   const dateInputRef = useRef<HTMLInputElement>(null)
 
   const categories = useCategories()
-  const budgets = useBudgetStatuses()
 
   const amount = parseAmount(buffer)
   const canSave = amount > 0
-
-  // Every budget this expense will count against, so the consequence is
-  // visible before saving rather than discovered afterwards
-  const affected = useMemo(() => coveringBudgets(budgets, date), [budgets, date])
 
   const isToday = date === today()
   const isYesterday = date === addDays(today(), -1)
@@ -143,33 +128,10 @@ export function ExpenseSheet({ open, onClose }: ExpenseSheetProps) {
                 canSave ? 'text-text' : 'text-faint',
               ].join(' ')}
             >
-              {formatBuffer(buffer)}
+              {buffer === '' ? '0' : formatTyping(buffer)}
             </span>
           </div>
 
-          <div className="mt-3 flex min-h-[34px] flex-col items-center gap-1 text-[12.5px] text-faint">
-            {affected.length === 0 ? (
-              <span>No budget covers this date</span>
-            ) : (
-              affected.slice(0, 2).map((status) => {
-                const after = status.remaining - amount
-                return (
-                  <span key={status.budget.id}>
-                    {status.budget.name}
-                    <span className="mx-1.5">·</span>
-                    {after >= 0 ? (
-                      <>{formatMoney(after)} left</>
-                    ) : (
-                      <span style={{ color: 'var(--color-over)' }}>
-                        {formatMoney(-after)} over
-                      </span>
-                    )}
-                  </span>
-                )
-              })
-            )}
-            {affected.length > 2 && <span>+{affected.length - 2} more</span>}
-          </div>
         </div>
 
         {/* Categories — open by default, one tap, entirely skippable */}

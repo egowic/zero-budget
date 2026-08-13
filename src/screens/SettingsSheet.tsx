@@ -9,6 +9,7 @@ import { describeSync, useSyncStatus } from '../sync/useSyncStatus'
 interface SettingsSheetProps {
   open: boolean
   onClose: () => void
+  onOpenCategories: () => void
 }
 
 const STATE_DOT: Record<string, string> = {
@@ -19,7 +20,7 @@ const STATE_DOT: Record<string, string> = {
   disabled: 'var(--color-faint)',
 }
 
-export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
+export function SettingsSheet({ open, onClose, onOpenCategories }: SettingsSheetProps) {
   const status = useSyncStatus()
   const [recovered, setRecovered] = useState<boolean | null>(null)
   const [formOpen, setFormOpen] = useState(false)
@@ -73,6 +74,11 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
               ? 'Everything is saved on this phone first, then copied to your private cloud store in the background. No sign-in, ever.'
               : 'Cloud backup is not set up for this build. Your data lives only on this device — export a backup regularly.'}
           </p>
+        </div>
+
+        <SectionLabel>Spending</SectionLabel>
+        <div className="overflow-hidden rounded-2xl bg-surface-2">
+          <Row label="Categories" onClick={onOpenCategories} />
         </div>
 
         <SectionLabel>Backup</SectionLabel>

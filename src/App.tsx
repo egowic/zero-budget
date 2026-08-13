@@ -4,11 +4,13 @@ import { Timeline } from './screens/Timeline'
 import { Budgets } from './screens/Budgets'
 import { ExpenseSheet } from './screens/ExpenseSheet'
 import { SettingsSheet } from './screens/SettingsSheet'
+import { CategoriesSheet } from './screens/CategoriesSheet'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('timeline')
   const [addOpen, setAddOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [budgetSheetOpen, setBudgetSheetOpen] = useState(false)
 
   return (
@@ -28,7 +30,15 @@ export default function App() {
       <TabBar tab={tab} onTabChange={setTab} onAdd={() => setAddOpen(true)} />
 
       <ExpenseSheet open={addOpen} onClose={() => setAddOpen(false)} />
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onOpenCategories={() => {
+          setSettingsOpen(false)
+          setCategoriesOpen(true)
+        }}
+      />
+      <CategoriesSheet open={categoriesOpen} onClose={() => setCategoriesOpen(false)} />
     </div>
   )
 }

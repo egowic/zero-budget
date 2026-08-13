@@ -3,6 +3,7 @@ import { Sheet } from '../components/Sheet'
 import { CategoryGrid } from '../components/CategoryGrid'
 import { useCategories } from '../db/queries'
 import { deleteExpense, updateExpense } from '../db/mutations'
+import { OTHER_CATEGORY_ID } from '../db/seed'
 import type { Expense } from '../db/schema'
 import { formatMoney } from '../lib/money'
 import { formatDate } from '../lib/dates'
@@ -29,7 +30,9 @@ export function ExpenseDetailSheet({ expense, onClose }: ExpenseDetailSheetProps
 
   async function recategorise(categoryId: string | null) {
     if (!expense) return
-    await updateExpense(expense.id, { categoryId })
+    // Clearing a category files the expense under Other rather than untagged,
+    // matching what happens when one is never chosen in the first place.
+    await updateExpense(expense.id, { categoryId: categoryId ?? OTHER_CATEGORY_ID })
   }
 
   async function remove() {

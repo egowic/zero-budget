@@ -1,4 +1,5 @@
-import { db, newId, type Budget, type Expense } from './schema'
+import { db, newId, type Budget, type Category, type Expense } from './schema'
+import { isBuiltInCategory, OTHER_CATEGORY_ID } from './seed'
 import { addDays, addMonths, today, type IsoDate } from '../lib/dates'
 import type { Minor } from '../lib/money'
 import type { Period } from './schema'
@@ -36,7 +37,9 @@ export async function addExpense(input: NewExpense): Promise<string> {
     id,
     amount: input.amount,
     date: input.date ?? today(),
-    categoryId: input.categoryId ?? null,
+    // Skipping the category is the fast path, not a gap in the data — an
+    // untagged expense files itself under Other rather than under nothing.
+    categoryId: input.categoryId ?? OTHER_CATEGORY_ID,
     note: input.note ?? null,
     createdAt: now,
     updatedAt: now,
@@ -196,15 +199,16 @@ export async function addCategory(input: {
 }): Promise<string> {
   const id = newId()
   const now = Date.now()
-  const count = await db.categories.count()
 
   await db.transaction('rw', db.categories, db.outbox, async () => {
+    // Sort after everything that exists, built-ins included
+    const last = await db.categories.orderBy('sortOrder').last()
     await db.categories.add({
       id,
-      name: input.name,
+      name: input.name.trim() || 'Category',
       icon: input.icon,
       color: input.color,
-      sortOrder: count,
+      sortOrder: (last?.sortOrder ?? -1) + 1,
       createdAt: now,
       updatedAt: now,
       deleted: 0,
@@ -214,14 +218,34 @@ export async function addCategory(input: {
   return id
 }
 
+export async function updateCategory(
+  id: string,
+  patch: Partial<Pick<Category, 'name' | 'icon' | 'color'>>,
+): Promise<void> {
+  await db.transaction('rw', db.categories, db.outbox, async () => {
+    await db.categories.update(id, { ...patch, updatedAt: Date.now() })
+    await enqueue('categories', id)
+  })
+}
+
+/**
+ * Built-in categories are refused rather than silently ignored, so a caller
+ * that gets this wrong fails loudly instead of appearing to work.
+ */
 export async function deleteCategory(id: string): Promise<void> {
+  if (isBuiltInCategory(id)) {
+    throw new Error('Built-in categories cannot be deleted.')
+  }
+
   await db.transaction('rw', db.categories, db.expenses, db.outbox, async () => {
-    await db.categories.update(id, { deleted: 1, updatedAt: Date.now() })
+    const now = Date.now()
+    await db.categories.update(id, { deleted: 1, updatedAt: now })
     await enqueue('categories', id)
 
+    // The expense itself survives; only its label goes away.
     const tagged = await db.expenses.where('categoryId').equals(id).toArray()
     for (const expense of tagged) {
-      await db.expenses.update(expense.id, { categoryId: null, updatedAt: Date.now() })
+      await db.expenses.update(expense.id, { categoryId: null, updatedAt: now })
       await enqueue('expenses', expense.id)
     }
   })
