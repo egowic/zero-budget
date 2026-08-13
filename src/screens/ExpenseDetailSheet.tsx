@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Sheet } from '../components/Sheet'
 import { CategoryGrid } from '../components/CategoryGrid'
 import { useCategories } from '../db/queries'
@@ -19,6 +20,17 @@ interface ExpenseDetailSheetProps {
  */
 export function ExpenseDetailSheet({ expense, onClose }: ExpenseDetailSheetProps) {
   const categories = useCategories()
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    expense?.categoryId ?? null,
+  )
+
+  // `expense` is the snapshot that was tapped in the timeline. Keep an
+  // immediate local selection while its IndexedDB update propagates back
+  // through the live timeline query, then reset whenever another/currently
+  // refreshed expense is opened.
+  useEffect(() => {
+    setSelectedCategoryId(expense?.categoryId ?? null)
+  }, [expense?.id, expense?.categoryId])
 
   if (!expense) return null
 
@@ -26,7 +38,18 @@ export function ExpenseDetailSheet({ expense, onClose }: ExpenseDetailSheetProps
     if (!expense) return
     // Clearing a category files the expense under Other rather than untagged,
     // matching what happens when one is never chosen in the first place.
-    await updateExpense(expense.id, { categoryId: categoryId ?? OTHER_CATEGORY_ID })
+    const nextCategoryId = categoryId ?? OTHER_CATEGORY_ID
+    const previousCategoryId = selectedCategoryId
+    setSelectedCategoryId(nextCategoryId)
+
+    try {
+      await updateExpense(expense.id, { categoryId: nextCategoryId })
+    } catch (error) {
+      // A rare local write failure should not leave the UI claiming a category
+      // that was never saved.
+      setSelectedCategoryId(previousCategoryId)
+      throw error
+    }
   }
 
   async function remove() {
@@ -58,7 +81,7 @@ export function ExpenseDetailSheet({ expense, onClose }: ExpenseDetailSheetProps
         </div>
         <CategoryGrid
           categories={categories}
-          selectedId={expense.categoryId}
+          selectedId={selectedCategoryId}
           onSelect={recategorise}
         />
 
