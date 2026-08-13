@@ -243,8 +243,9 @@ export function CategoriesSheet({ open, onClose }: CategoriesSheetProps) {
 
         <p className="mt-3 px-1 text-[11.5px] leading-relaxed text-faint">
           Drag the handle to set the order used when adding an expense. Tap any emoji
-          or name to change it. The nine built-in categories cannot be removed;
-          deleting one of your own keeps its expenses, which fall back to Other.
+          to change it. The nine built-in category names are fixed and cannot be
+          removed; your own categories can be renamed or deleted. Deleted category
+          expenses fall back to Other.
         </p>
       </div>
     </Sheet>
@@ -305,17 +306,22 @@ function CategoryRow({
         style={{ background: `${category.color}2b` }}
       />
 
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => {
-          const next = draft.trim()
-          if (next && next !== category.name) onRename(next)
-          else setDraft(category.name)
-        }}
-        maxLength={24}
-        className="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
-      />
+      {builtIn ? (
+        <span className="min-w-0 flex-1 truncate text-[15px]">{category.name}</span>
+      ) : (
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            const next = draft.trim()
+            if (next && next !== category.name) onRename(next)
+            else setDraft(category.name)
+          }}
+          aria-label={`Rename ${category.name}`}
+          maxLength={24}
+          className="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
+        />
+      )}
 
       {builtIn ? null : confirming ? (
         <span className="flex shrink-0 gap-1.5">

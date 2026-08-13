@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeStatus } from '../lib/budget'
-import { deriveEndDate, nextStart } from '../db/mutations'
+import { deriveEndDate, nextStart, updateCategory } from '../db/mutations'
 import { addMonths, daysBetween, formatRange } from '../lib/dates'
 import type { Budget, Period } from '../db/schema'
 
@@ -107,5 +107,13 @@ describe('range formatting', () => {
     const thisYear = new Date().getFullYear()
     expect(formatRange(`${thisYear}-07-27`, `${thisYear}-08-26`)).toBe('Jul 27 – Aug 26')
     expect(formatRange('2031-07-27', '2031-08-26')).toBe('Jul 27 – Aug 26, 2031')
+  })
+})
+
+describe('built-in category protection', () => {
+  it('refuses to rename a built-in category in the mutation layer', async () => {
+    await expect(
+      updateCategory('00000000-0000-4000-8000-000000000011', { name: 'Changed' }),
+    ).rejects.toThrow('Built-in category names cannot be changed.')
   })
 })

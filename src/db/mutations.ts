@@ -222,6 +222,10 @@ export async function updateCategory(
   id: string,
   patch: Partial<Pick<Category, 'name' | 'icon' | 'color'>>,
 ): Promise<void> {
+  if (isBuiltInCategory(id) && patch.name !== undefined) {
+    throw new Error('Built-in category names cannot be changed.')
+  }
+
   await db.transaction('rw', db.categories, db.outbox, async () => {
     await db.categories.update(id, { ...patch, updatedAt: Date.now() })
     await enqueue('categories', id)

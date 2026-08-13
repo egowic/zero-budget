@@ -240,6 +240,9 @@ Safari sekmesinde hem de mevcut Ana Ekran PWA'sında gerçek cihaz testi yapılm
   kaynağını kullandığından kategori grid'leri Settings'teki sırayı doğrudan izler.
 - Dokuz built-in kategorinin silinme koruması aynen bırakıldı. Custom kategori
   ekleme ve yalnızca custom kategoriyi silme davranışı değişmedi.
+- Dokuz built-in kategorinin isimleri de hem Categories arayüzünde hem mutation
+  katmanında değiştirilemez. Custom kategoriler yeniden adlandırılabilir; built-in
+  emoji düzenleme davranışı korunur.
 - Activity ekranındaki ana budget kartına Budgets ekranıyla aynı harcanan yüzde
   etiketi eklendi. Yüzde formatı iki ekranda ortak `formatPercentUsed()` helper'ına
   bağlandı.
