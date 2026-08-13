@@ -5,10 +5,19 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // `base` matters for GitHub Pages project sites, where the app is served from
 // /<repo>/ rather than the domain root. Override with BASE_PATH at build time.
-const base = process.env.BASE_PATH ?? '/'
+// Normalised to always start and end with a slash, since the manifest scope
+// and the service worker's navigation fallback are both built from it.
+const base = `/${(process.env.BASE_PATH ?? '/').replace(/^\/|\/$/g, '')}/`.replace(
+  '//',
+  '/',
+)
 
 export default defineConfig({
   base,
+  server: {
+    // Bind to the LAN so the app can be opened on a phone on the same Wi-Fi
+    host: true,
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -24,8 +33,8 @@ export default defineConfig({
         scope: base,
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#08080a',
-        theme_color: '#08080a',
+        background_color: '#09090c',
+        theme_color: '#09090c',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -40,7 +49,7 @@ export default defineConfig({
       workbox: {
         // Precache the whole app shell so a cold start never touches the network.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallback: `${base}index.html`.replace('//', '/'),
+        navigateFallback: `${base}index.html`,
         cleanupOutdatedCaches: true,
       },
     }),
