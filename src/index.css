@@ -125,20 +125,13 @@
   .ios-clipped-standalone .app-tabbar .safe-bottom.pb-2 {
     padding-bottom: 0;
   }
-  /* iOS 27's scroll-edge shadow follows normal page content even when extra
-     spacing is added. A real viewport-constrained, opaque header makes WebKit
-     treat the top edge as owned by the app and replaces that effect with the
-     app's solid background. The screen padding reserves the header's space. */
-  .ios-clipped-standalone .app-header {
-    position: fixed;
-    z-index: 45;
-    top: 0;
-    right: 0;
-    left: 0;
-    background: var(--color-ink);
-  }
-  .ios-clipped-standalone .app-screen {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 3.75rem);
+  /* Diagnostic workaround for the native iOS scroll-edge layer. WebKit can
+     report a zero top safe-area in an installed web app, so do not key this to
+     an iOS version or viewport measurement. This intentionally large offset
+     proves the standalone branch is active and places controls well below the
+     system-owned blur; it will be tightened after the on-device check. */
+  .standalone-web-app .app-header.safe-top.pt-3 {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 7rem);
   }
 
   .hide-scrollbar::-webkit-scrollbar {

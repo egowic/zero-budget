@@ -22,3 +22,18 @@ export async function signInWithEmail(
     return { ok: false, message: 'No connection. Try again later.' }
   }
 }
+
+/** Ends only this browser/PWA session; other signed-in devices stay active. */
+export async function signOutCurrentDevice(): Promise<
+  { ok: true } | { ok: false; message: string }
+> {
+  if (!supabase) return { ok: false, message: 'Sync is not configured.' }
+
+  try {
+    const { error } = await supabase.auth.signOut({ scope: 'local' })
+    if (error) return { ok: false, message: error.message }
+    return { ok: true }
+  } catch {
+    return { ok: false, message: 'No connection. Try again later.' }
+  }
+}

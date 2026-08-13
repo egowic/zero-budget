@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Sheet } from '../components/Sheet'
 import { downloadBackup, restoreBackup } from '../sync/backup'
+import { signOutCurrentDevice } from '../sync/auth'
 import { isSyncConfigured } from '../sync/client'
 import { sync } from '../sync/engine'
 import { describeSync, useSyncStatus } from '../sync/useSyncStatus'
@@ -28,6 +29,7 @@ export function SettingsSheet({
 }: SettingsSheetProps) {
   const status = useSyncStatus()
   const [notice, setNotice] = useState<string | null>(null)
+  const [signingOut, setSigningOut] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -42,6 +44,17 @@ export function SettingsSheet({
       void sync()
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not read that file.')
+    }
+  }
+
+  async function handleSignOut() {
+    if (signingOut || status.pending > 0 || status.state === 'syncing') return
+    setSigningOut(true)
+    setNotice(null)
+    const result = await signOutCurrentDevice()
+    if (!result.ok) {
+      setNotice(result.message)
+      setSigningOut(false)
     }
   }
 
@@ -85,7 +98,19 @@ export function SettingsSheet({
                   <div className="text-[13px] text-muted">Signed in</div>
                   <div className="truncate text-[12px] text-faint">{accountEmail}</div>
                 </div>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  disabled={signingOut || status.pending > 0 || status.state === 'syncing'}
+                  className="ml-auto shrink-0 text-[12.5px] text-over disabled:text-faint"
+                >
+                  {signingOut ? 'Logging out…' : 'Log out'}
+                </button>
               </div>
+              <p className="mt-2 text-[11.5px] leading-relaxed text-faint">
+                Your local data stays on this phone. Log back into this account to
+                resume syncing.
+              </p>
             </div>
           </>
         )}

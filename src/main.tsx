@@ -17,6 +17,13 @@ const standalone =
 const iosMajor = Number(navigator.userAgent.match(/\bOS (\d+)[._]/)?.[1] ?? 0)
 const clippedViewport = window.screen.height - window.innerHeight >= 50
 
+// `display-mode: standalone` is the reliable signal for Safari's “Open as Web
+// App” option. Keep it separate from the iOS-version heuristic: recent betas
+// can freeze or change their user-agent and safe-area geometry independently.
+if (standalone) {
+  document.documentElement.classList.add('standalone-web-app')
+}
+
 if (standalone && iosMajor >= 27 && clippedViewport) {
   document.documentElement.classList.add('ios-clipped-standalone')
 }
