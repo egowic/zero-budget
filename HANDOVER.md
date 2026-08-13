@@ -1,17 +1,54 @@
-# Zero Budget — Proje Handover
+# Zero Budget — Web/PWA + Native iOS Birleşik Handover
 
 Son güncelleme: 14 Ağustos 2026
 
-Aktif branch: `main`
+Aktif branch'ler: Her iki bağımsız repoda da `main`
 
-Bu doküman oluşturulmadan önceki son uygulama commit'i: `9cd2a5f`
+Bu güncelleme öncesindeki son commit'ler:
+
+- Web/PWA repo: `3304aa0 Document category selection fix`
+- Native iOS repo: `94c68e4 Configure Personal Team device signing`
 
 Bu dosya, projenin Claude Code ile başlayan ilk geliştirme aşamasından sonra
 Codex ile devam eden oturumda yapılan işleri ve mevcut teknik durumu devralacak
-kişiye aktarmak için hazırlanmıştır. Gizli anahtarlar ve kullanıcı parolaları
-bilerek bu dosyaya dahil edilmemiştir.
+kişiye aktarmak için hazırlanmıştır. Artık birbiriyle görsel/işlevsel akraba,
+ancak veri ve deployment bakımından tamamen ayrı iki uygulama vardır. Gizli
+anahtarlar ve kullanıcı parolaları bilerek bu dosyaya dahil edilmemiştir.
 
-## 1. Proje özeti
+## 0. En önemli ayrım: iki bağımsız uygulama ve iki bağımsız repo
+
+### A. Production web/PWA
+
+- Lokal repo: `/Users/egowic/Repos/Project Zero`
+- GitHub: <https://github.com/egowic/zero-budget>
+- Canlı uygulama: <https://egowic.github.io/zero-budget/>
+- Veri: local-first IndexedDB + Supabase sync/backup
+- Auth: tek e-posta hesabı; public signup ve anonymous sign-in kapalı
+- Dağıtım: GitHub Pages + GitHub Actions
+- Ana Ekran kurulumu: Safari'den “Open as Web App”
+
+### B. Ayrı native iOS uygulaması
+
+- Lokal repo: `/Users/egowic/Xcode/ZeroBudget`
+- Xcode projesi:
+  `/Users/egowic/Xcode/ZeroBudget/ios/App/App.xcodeproj`
+- Kullanıcıya görünen ad: `ZeroBudget`
+- Bundle identifier: `com.egowic.zerobudget.egebilir`
+- Veri: yalnızca native app konteynerindeki local IndexedDB
+- Supabase/auth/sync/recovery/cloud backup: yok
+- Dağıtım: ücretsiz Apple Personal Team ile doğrudan iPhone'a yükleme
+- GitHub remote/App Store/TestFlight: yok
+
+Bu iki repo birbirini otomatik güncellemez. Web repo GitHub'a push edilince PWA
+güncellenir; native iOS uygulaması güncellenmez. Ortak bir UI/iş mantığı değişikliği
+iki uygulamada da isteniyorsa değişiklik iki kod tabanına bilinçli olarak port
+edilmeli, native tarafta `npm run native:sync` çalıştırılmalı ve `.app` yeniden
+build/install edilmelidir.
+
+Native uygulama web/PWA verisini import etmez, Supabase'e bağlanmaz ve mevcut
+PWA hesabını kullanmaz. İki uygulamanın IndexedDB alanları da ayrıdır.
+
+## 1. Production web/PWA özeti
 
 Zero, iPhone'da Safari üzerinden Ana Ekran'a eklenerek kullanılan, React +
 TypeScript ile yazılmış local-first bir bütçe PWA'sıdır.
@@ -921,7 +958,8 @@ Aşağıdaki fikirler unutulmuş değildir; konuşulup ertelenmiştir:
 ## 13. Ürün kararları ve korunması gereken davranışlar
 
 Bir sonraki geliştirici aşağıdaki maddeleri geçici implementasyon detayı değil,
-bu sohbet boyunca verilmiş ürün kararları olarak görmelidir:
+bu sohbet boyunca web/PWA için verilmiş ürün kararları olarak görmelidir. Native
+iOS uygulamasının bilinçli farklılıkları Bölüm 14'te ayrıca yazılmıştır:
 
 - Uygulama tek kullanıcı içindir.
 - Yeni kullanıcı signup kapalı kalmalıdır.
@@ -943,3 +981,406 @@ bu sohbet boyunca verilmiş ürün kararları olarak görmelidir:
 - Tablolar/RLS yanlışlıkla drop edilmemelidir.
 - Cloud hard-delete işlemi yapılırken yerel IndexedDB'nin ayrı kaldığı unutulmamalıdır.
 - Uzun yıllar kullanım için en değerli gelecek yatırım bağımsız backup'tır.
+
+## 14. Ayrı native iOS uygulaması — eksiksiz devir
+
+### 14.1 Neden ve nasıl oluşturuldu
+
+Web/PWA geliştirmesi bittikten sonra kullanıcı, ücretli Apple Developer hesabı
+olmadan iPhone'da yedi günlük Personal Team provisioning ile deneyebileceği ayrı
+bir iOS uygulaması istedi. Bu uygulama “fantezi/deney” amaçlıdır ve production
+PWA'nın yerine geçmesi şart değildir.
+
+Kullanıcının açık ürün kararları:
+
+- Proje ve görünen uygulama adı her yerde boşluksuz `ZeroBudget` olmalı.
+- Mevcut UI, animasyonlar, budget/expense/category fonksiyonları mümkün olduğunca
+  birebir korunmalı.
+- Mevcut web/Supabase verisi taşınmamalı veya eşlenmemeli.
+- Supabase, login, sync, recovery ve cloud backup bulunmamalı.
+- Veri yalnızca uygulamanın kendi local konteynerinde tutulmalı.
+- Uygulama silinince verinin silinmesi kabul edildi.
+- Settings içindeki Signing/Account, Sync ve Backup alanları kaldırılmalı;
+  Categories yönetimi kalmalı.
+- Önce simulator build ve görünüm doğrulanmalı, sonra fiziksel telefona yüklenmeli.
+
+Uygulama SwiftUI ile sıfırdan yeniden yazılmadı. Mevcut React/Vite UI ve iş
+mantığı kopyalanıp Capacitor 8 native iOS kabuğuna gömüldü. Kullanıcı açısından
+Home Screen'den açılan, sandbox'ı ve imzalı `.app` paketi olan gerçek bir iOS
+uygulamasıdır; teknik olarak UI bir `WKWebView` içinde çalışır.
+
+Bu yaklaşımın nedeni görünüm ve davranışı minimum riskle birebir korumaktı.
+SwiftUI rewrite çok daha uzun sürer, iki implementasyon arasında görsel/işlevsel
+sapma riski yaratırdı.
+
+### 14.2 Native repo ve Git durumu
+
+- Repo yolu: `/Users/egowic/Xcode/ZeroBudget`
+- Branch: `main`
+- Repo web projesinden bağımsız olarak `git init` ile oluşturuldu.
+- Web repo geçmişi veya `.git` klasörü kopyalanmadı.
+- Herhangi bir GitHub remote oluşturulmadı/push yapılmadı.
+- İlk native commit:
+  `9119bda Build local-only ZeroBudget iOS app`
+- Cihaz imzalama commit'i:
+  `94c68e4 Configure Personal Team device signing`
+- Build çıktıları `DerivedData/`, `DeviceDerivedData/`, `dist/`, generated native
+  public/config dosyaları ve `node_modules/` ignore edilir.
+
+Native uygulama hazırlanırken production web repo üzerinde değişiklik yapılmadığı
+ve web repo worktree'sinin temiz kaldığı ayrıca kontrol edildi.
+
+### 14.3 Native teknoloji yığını ve paketler
+
+- React 19
+- TypeScript 5.9
+- Vite 7
+- Tailwind CSS 4
+- Dexie 4 + `dexie-react-hooks`
+- Capacitor Core/iOS/CLI 8.5.0
+- Xcode 27 beta
+- Minimum deployment target: iOS 15.0
+- Target device family: yalnızca iPhone (`TARGETED_DEVICE_FAMILY = 1`)
+- Orientation: yalnızca portrait
+
+`package.json` native script'leri:
+
+```text
+npm run dev
+npm run typecheck
+npm test
+npm run build
+npm run native:sync
+npm run native:open
+```
+
+`native:sync`, önce production web bundle'ını üretir, sonra `cap sync ios` ile
+`dist` içeriğini Xcode projesine kopyalar. Source değiştirilip yalnız Xcode'da
+Run'a basılırsa eski bundle çalışabilir; bu nedenle her web-source değişikliğinden
+sonra `npm run native:sync` zorunlu kabul edilmelidir.
+
+### 14.4 Native taraftan çıkarılan web/PWA ve cloud parçaları
+
+Native repo ilk oluşturulurken aşağıdakiler kaldırıldı:
+
+- Supabase client dependency'si ve tüm `src/sync/*` dosyaları
+- Login ekranı ve auth gate
+- `SyncDot` ve header'lardaki yeşil/cloud durum noktaları
+- Account email, Sync now, logout, export/restore ve recovery Settings UI'ları
+- Outbox entity/table ve enqueue logic'i
+- PWA plugin'i (`vite-plugin-pwa`), manifest/service-worker üretimi
+- PWA standalone/iOS beta user-agent/geometri tespiti
+- GitHub Pages'e özel absolute base path; native build `base: './'` kullanır
+- `robots.txt` ve web deployment'a özel PWA metadata
+
+`SettingsSheet` native uygulamada yalnızca `Spending → Categories` satırını
+gösterir.
+
+### 14.5 Native local data modeli
+
+Database adı hâlâ `zero`dur ve Dexie üzerinden WKWebView'in IndexedDB alanında
+oluşturulur. Store'lar:
+
+- `budgets`
+- `expenses`
+- `categories`
+- `meta`
+
+Native uygulamada outbox yoktur. Mutation'lar doğrudan local IndexedDB'ye yazar.
+Cloud veya network beklenmez.
+
+Web/PWA'dan önemli farklar:
+
+- Native expense delete gerçek local hard delete yapar.
+- Native budget delete gerçek local hard delete yapar; date-based expense'ler
+  korunur.
+- Custom category delete kategoriyi hard delete eder ve o kategoriye bağlı local
+  expense'lerin `categoryId` alanını `null` yapar.
+- Web/PWA ise cihazlar arası sync resurrection'ını engellemek için tombstone
+  kullanmaya devam eder.
+
+İlk simulator açılışında WebKit app container'ı içinde gerçek
+`IndexedDB.sqlite3` dosyasının oluştuğu doğrulandı. Object store inspection
+sonucunda 9 built-in category ve 1 meta kaydı bulundu; budget ve expense başlangıçta
+boştu.
+
+Veri uygulama kapanıp açılınca ve normal update install yapılınca aynı bundle
+identifier altında kalır. Kullanıcı uygulamayı iPhone'dan manuel silerse app
+container ve tüm native local veri silinir. Native uygulamada bunu kurtaracak
+Supabase veya export/restore ekranı yoktur; bu bilinçli karardır.
+
+### 14.6 Korunan UI ve davranışlar
+
+Mevcut PWA'nın aşağıdaki ana davranışları native kopyada korundu:
+
+- Activity timeline
+- Budgets listesi ve budget hero
+- Expense oluşturma, tarih/note/category seçimi
+- Expense detayından category değiştirme ve delete
+- Budget oluşturma/düzenleme/silme
+- Month/week/custom period
+- Repeat ve recurring budget roll
+- Upcoming/`Not started` budget için günlük limit
+- Custom category oluşturma, emoji/name/color düzenleme ve silme
+- Aynı dark tema, kartlar, bottom sheet'ler, tab bar ve custom expense keypad
+- Category selection'ın anında selected görünmesini sağlayan optimistik UI fix'i
+
+Expense miktarı girişinde iOS sistem klavyesi beklenmez; tasarım gereği uygulamanın
+kendi büyük `Keypad` bileşeni kullanılır. Budget name/amount, note ve category
+name/emoji alanları normal iOS klavyesini açar. Fiziksel cihaz testinde bir an
+klavyenin açılmadığı sanıldı; telefonun o andaki input/keyboard durumundan
+kaynaklandığı anlaşılınca kullanıcı klavyenin çalıştığını doğruladı. Bu konuda
+kod değişikliği yapılmadı.
+
+### 14.7 Native görünüm ve iOS kabuğu ayarları
+
+- App display name: `ZeroBudget`
+- İlk düşünülen bundle ID: `com.egowic.ZeroBudget`
+- Apple bu identifier'ın küresel olarak müsait olmadığını bildirdi.
+- Güncel benzersiz bundle ID: `com.egowic.zerobudget.egebilir`
+- Bundle ID teknik kimliktir; kullanıcıya görünen uygulama adını değiştirmedi.
+- App icon, web/PWA'daki `public/icon-512.png` kaynağından 1024 × 1024 native
+  asset olarak üretildi.
+- Launch screen herhangi bir default Capacitor görseli göstermeden düz uygulama
+  rengi `#09090c` kullanır.
+- Native window ve bridge controller background'u da `#09090c`; yükleme sırasında
+  beyaz flash oluşmaması hedeflendi.
+- `UIUserInterfaceStyle = Dark`
+- Status bar light content
+- Yalnız portrait orientation
+- Standalone PWA için geliştirilen özel 1.75rem/iOS 27 shadow workaround'u native
+  repoya taşınmadı. Native uygulama standart `env(safe-area-inset-*)` kuralları
+  kullanır ve simulator/fiziksel app kabuğuna göre çalışır.
+
+### 14.8 Geliştirme ortamı
+
+Kurulum sırasında doğrulanan ortam:
+
+- macOS 27 beta
+- Xcode: `/Applications/Xcode-beta.app`
+- Xcode version/build: 27.0 (`27A5228h`)
+- Sistem `xcode-select` yolu Command Line Tools'a işaret ediyordu.
+
+Bu nedenle shell üzerinden Xcode/simctl/devicectl komutlarında şu prefix
+kullanıldı:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+```
+
+Bu prefix olmadan shell yanlış toolchain'i kullanabilir. Xcode GUI içinden build
+ederken ayrıca gerekmez.
+
+### 14.9 Simulator doğrulaması
+
+Kullanıcının telefonu iPhone 14 Pro Max olmasına rağmen ilk native doğrulama
+iPhone 17 Pro simulator üzerinde yapıldı. App iPhone-only/autolayout/safe-area
+tabanlı olduğu için model farkı build'i engellemez; fiziksel 14 Pro Max testi de
+sonradan yapıldı.
+
+Kullanılan simulator:
+
+- iPhone 17 Pro
+- Simulator runtime: iOS 26.4.1
+- Simulator UUID: `44B32DC8-3897-4D0E-B354-B438499AAEAC`
+
+Simulator build komutu:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
+xcodebuild \
+  -project ios/App/App.xcodeproj \
+  -scheme App \
+  -configuration Debug \
+  -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,id=44B32DC8-3897-4D0E-B354-B438499AAEAC' \
+  -derivedDataPath DerivedData \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+```
+
+Doğrulanan sonuçlar:
+
+- Typecheck başarılı
+- 1 test dosyasında 11/11 test başarılı
+- Vite production build başarılı; 55 module transform edildi
+- Capacitor sync başarılı
+- Xcode simulator build başarılı
+- `.app` simulator'a kuruldu ve açıldı
+- Koyu launch/status bar, üst safe-area, Activity header, Settings butonu ve
+  bottom tab bar görsel olarak doğru konumdaydı
+- App terminate edilip yeniden launch edildi; UI tekrar doğru açıldı
+- Local IndexedDB dosyası ve seed kayıtları diskte doğrulandı
+- `npm audit --omit=dev`: 0 vulnerability
+- Tüm dependency audit'inde Capacitor CLI'ın dev-only `xcode → uuid` zincirinden
+  3 moderate kayıt görüldü. Runtime/prod dependency riski değildi; kırıcı
+  `npm audit fix --force` uygulanmadı.
+
+### 14.10 Fiziksel iPhone 14 Pro Max'e Wi-Fi kurulumu
+
+Fiziksel cihaz:
+
+- Ad: `Ege’s Iphone`
+- Model: iPhone 14 Pro Max (`iPhone15,3`)
+- iOS: 27.0 beta (`24A5408d`)
+- Xcode tarafından `network` interface ile görüldü
+- Device Developer Mode kullanıcı tarafından etkinleştirildi
+- İlk eşleştirme Finder/Xcode üzerinden yapıldı; son kurulum Wi-Fi ile tamamlandı
+
+Apple hesabı/sertifika:
+
+- Apple Development certificate geçerliydi
+- Personal Team ID: `6MQKTG872G`
+- Xcode target Debug ve Release config'lerine
+  `DEVELOPMENT_TEAM = 6MQKTG872G` kalıcı olarak eklendi
+- Signing style automatic
+
+İlk cihaz build'i Development Team seçilmediği için durdu. Team eklendikten
+sonra `com.egowic.ZeroBudget` identifier'ı müsait olmadığı için ikinci kez durdu.
+Bundle ID `com.egowic.zerobudget.egebilir` yapıldıktan sonra Xcode App ID ve free
+provisioning profile'ı otomatik oluşturdu ve signed device build başarılı oldu.
+
+Cihazı her seferinde yeniden keşfetmek için:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
+xcrun devicectl list devices
+
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
+xcrun xcdevice list --timeout 20
+```
+
+Son doğrulanan fiziksel UDID:
+`00008120-001905E00C40C01E`
+
+Device build komutu:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
+xcodebuild \
+  -project ios/App/App.xcodeproj \
+  -scheme App \
+  -configuration Debug \
+  -destination 'id=00008120-001905E00C40C01E' \
+  -derivedDataPath DeviceDerivedData \
+  -allowProvisioningUpdates \
+  build
+```
+
+Üretilen paket:
+
+```text
+DeviceDerivedData/Build/Products/Debug-iphoneos/App.app
+```
+
+Wi-Fi install/launch örneği:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
+xcrun devicectl device install app \
+  --device <devicectl-core-device-identifier> \
+  DeviceDerivedData/Build/Products/Debug-iphoneos/App.app
+
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
+xcrun devicectl device process launch \
+  --device <devicectl-core-device-identifier> \
+  com.egowic.zerobudget.egebilir
+```
+
+`devicectl` core-device identifier ile iPhone UDID aynı değer olmak zorunda
+değildir; her kurulum öncesi `devicectl list devices` çıktısından güncel değeri
+almak daha güvenlidir.
+
+İlk install başarılı oldu ancak ilk remote launch, developer profile kullanıcı
+tarafından henüz explicit trust edilmediği için Security/RequestDenied hatası
+verdi. Kullanıcı iPhone'da Settings → General → VPN & Device Management içinden
+`Apple Development` profilini trust etti. Sonrasında uygulamayı açıp gerçek cihazda
+test etti ve çalıştığını doğruladı.
+
+Ücretsiz Personal Team provisioning yaklaşık yedi gün geçerlidir. Süre dolunca
+app açılmayabilir; aynı team ve bundle identifier ile yeniden build/install
+edilmelidir. App telefondan silinmeden update install yapılması local verinin
+korunması için önemlidir. Ücretli Apple Developer hesabı yoktur; App Store veya
+TestFlight deployment yapılmadı.
+
+### 14.11 Native tarafta önemli dosyalar
+
+- `/Users/egowic/Xcode/ZeroBudget/capacitor.config.ts` — app ID/ad/webDir
+- `/Users/egowic/Xcode/ZeroBudget/package.json` — web/native scripts ve paketler
+- `/Users/egowic/Xcode/ZeroBudget/src/App.tsx` — auth'suz doğrudan app shell
+- `/Users/egowic/Xcode/ZeroBudget/src/main.tsx` — seed + recurring roll startup
+- `/Users/egowic/Xcode/ZeroBudget/src/index.css` — tema ve standard safe areas
+- `/Users/egowic/Xcode/ZeroBudget/src/db/schema.ts` — local-only Dexie schema
+- `/Users/egowic/Xcode/ZeroBudget/src/db/mutations.ts` — doğrudan local writes
+- `/Users/egowic/Xcode/ZeroBudget/src/screens/SettingsSheet.tsx` — yalnız Categories
+- `/Users/egowic/Xcode/ZeroBudget/ios/App/App/Info.plist` — portrait/dark/status bar
+- `/Users/egowic/Xcode/ZeroBudget/ios/App/App/SceneDelegate.swift` — native dark window
+- `/Users/egowic/Xcode/ZeroBudget/ios/App/App/Base.lproj/LaunchScreen.storyboard`
+- `/Users/egowic/Xcode/ZeroBudget/ios/App/App.xcodeproj/project.pbxproj` — target,
+  bundle ID, Team ve signing
+- `/Users/egowic/Xcode/ZeroBudget/README.md` — kısa native kullanım notları
+
+### 14.12 Native uygulama için güncelleme prosedürü
+
+Bir sonraki geliştirici native uygulamada değişiklik yaparsa önerilen sıra:
+
+```bash
+cd /Users/egowic/Xcode/ZeroBudget
+npm ci
+npm run typecheck
+npm test
+npm run native:sync
+```
+
+Ardından simulator build/test; sonuç temizse physical device build/install.
+Fiziksel cihaz aynı Wi-Fi'da, eşleşmiş, açık/erişilebilir ve Developer Mode açık
+olmalıdır.
+
+Her native update'te:
+
+1. Source değişikliklerini yap.
+2. `npm run native:sync` ile web asset'lerini native projeye yenile.
+3. `xcodebuild` veya Xcode Run ile signed device build al.
+4. Mevcut app'in üzerine install et; local veri gerekiyorsa app'i silme.
+5. Gerçek 14 Pro Max'te input, sheet, safe-area ve local persistence smoke test yap.
+6. Native repo içinde ayrı commit oluştur.
+
+PWA'nın service-worker gibi otomatik uzaktan update mekanizması native app'te
+yoktur. Native source/bundle değişiklikleri iPhone'a ancak yeni signed build
+kurulunca ulaşır.
+
+### 14.13 Native ürün kararları ve dokunulmaması gereken sınırlar
+
+- Native uygulamaya kullanıcı istemeden Supabase veya login geri eklenmemeli.
+- Native ve PWA verilerinin bağımsız kalması bilinçli karardır.
+- Native Settings yalnız Categories içermelidir.
+- UI genel olarak redesign edilmemeli; kullanıcı mevcut görünümü birebir istedi.
+- Bundle ID değiştirilmemeli; aksi halde iOS bunu ayrı app sayar ve eski local
+  app container'ına erişim kaybolur.
+- Personal Team/Developer Mode gereksinimi App Store deployment değildir.
+- App silinirse verinin silinmesi kabul edilmiştir; şu an native backup yoktur.
+- PWA tombstone/sync mantığı native local mutation'lara yanlışlıkla taşınmamalı.
+- Native app'te expense custom keypad ile girilir; bunun sistem klavyesi açmaması
+  bug değildir.
+- Web/PWA'ya yapılan yeni bir fix native'e otomatik geçmez; iki repo açıkça
+  karşılaştırılmalıdır.
+
+## 15. Claude Code için başlangıç kontrol listesi
+
+1. Kullanıcının isteğinin web/PWA'yı mı yoksa native iOS uygulamasını mı hedeflediğini
+   ilk olarak belirle.
+2. Web/PWA için `/Users/egowic/Repos/Project Zero` içinde çalış.
+3. Native için `/Users/egowic/Xcode/ZeroBudget` içinde çalış.
+4. İki repo arasında dosya kopyalamadan önce cloud/auth/outbox farklarını incele;
+   komple dosya overwrite etme.
+5. Web/PWA değişikliğinde typecheck + 11 test + Pages production build/deploy'i
+   doğrula.
+6. Native değişikliğinde typecheck + 11 test + `native:sync` + simulator build,
+   sonra gerekirse Wi-Fi physical install yap.
+7. Supabase destructive işleminden önce açık kullanıcı onayı al ve exact rows'u
+   read-only query ile belirle.
+8. Native app'i fiziksel cihazdan silme; local-only veri kurtarılamaz.
+9. Gizli Supabase değerlerini, database parolasını veya Apple private key'i
+   handover/commit içine yazma.
+10. Bu dosya ile güncel `main` kodu çelişirse çalışan kodu incele; eski kronolojik
+    bölümlerin ara iterasyonları nihai mimari sanılmamalıdır.
