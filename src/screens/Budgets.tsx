@@ -126,7 +126,18 @@ function BudgetCard({
         >
           {formatMoney(remaining)}
         </span>
-        <span className="text-[12.5px] text-faint">of {formatMoney(budget.amount)}</span>
+        <span className="text-[12.5px] text-faint">
+          {remaining < 0 ? 'over' : 'left'}
+        </span>
+      </div>
+
+      <div className="mt-1 flex items-center justify-between gap-3 text-[12.5px] text-faint">
+        <span>
+          {formatMoney(status.spent)} spent of {formatMoney(budget.amount)}
+        </span>
+        <span className="tnum shrink-0" style={{ color }}>
+          {formatPercentUsed(percentUsed)}
+        </span>
       </div>
 
       <div className="mt-3.5">
@@ -135,9 +146,6 @@ function BudgetCard({
 
       <div className="mt-2.5 flex items-center justify-between text-[11.5px] text-faint">
         <span>{formatDate(budget.startDate, { withYear: true })}</span>
-        <span className="tnum" style={{ color }}>
-          {formatPercentUsed(percentUsed)}
-        </span>
         <span>{formatDate(budget.endDate, { withYear: true })}</span>
       </div>
 

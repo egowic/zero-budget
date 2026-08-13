@@ -246,6 +246,9 @@ Safari sekmesinde hem de mevcut Ana Ekran PWA'sında gerçek cihaz testi yapılm
 - Activity ekranındaki ana budget kartına Budgets ekranıyla aynı harcanan yüzde
   etiketi eklendi. Yüzde formatı iki ekranda ortak `formatPercentUsed()` helper'ına
   bağlandı.
+- Budgets kartındaki yüzde daha sonra tarihlerin arasından kaldırılıp Activity
+  kartındakiyle aynı şekilde `spent of total` satırının sağına taşındı; iki kartın
+  bilgi hiyerarşisi eşitlendi.
 - Bu geliştirmeler yalnızca web/PWA reposuna yapıldı; ayrı native iOS repo bu
   iterasyonda değiştirilmedi.
 
