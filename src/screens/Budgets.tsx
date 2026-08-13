@@ -138,19 +138,17 @@ function BudgetCard({
       </div>
 
       {phase === 'active' && (
-        <div className="mt-3 flex items-center justify-between border-t border-hairline pt-3 text-[12.5px]">
-          <span className="text-faint">
-            {dailyAllowance === null ? (
-              'Nothing left for today'
-            ) : (
-              <>
-                <span className="tnum text-text">{formatMoney(dailyAllowance)}</span> a
-                day from here
-              </>
-            )}
-          </span>
+        <div className="mt-3 flex items-baseline justify-between border-t border-hairline pt-3 text-[12.5px]">
+          {dailyAllowance === null ? (
+            <span style={{ color }}>Nothing left to spend</span>
+          ) : (
+            <span>
+              <span className="tnum text-text">{formatMoney(dailyAllowance)}</span>
+              <span className="text-faint"> / day</span>
+            </span>
+          )}
           <span className="tnum text-faint">
-            {status.daysRemaining} {status.daysRemaining === 1 ? 'day' : 'days'}
+            {status.daysRemaining} {status.daysRemaining === 1 ? 'day' : 'days'} left
           </span>
         </div>
       )}

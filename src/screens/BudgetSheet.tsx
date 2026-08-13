@@ -9,7 +9,7 @@ import {
   sanitizeTyping,
   toMajor,
 } from '../lib/money'
-import { daysBetween, formatRange, today, type IsoDate } from '../lib/dates'
+import { addDays, daysBetween, formatRange, today, type IsoDate } from '../lib/dates'
 
 interface BudgetSheetProps {
   open: boolean
@@ -29,6 +29,8 @@ export function BudgetSheet({ open, budget, onClose }: BudgetSheetProps) {
   const [amountText, setAmountText] = useState('')
   const [startDate, setStartDate] = useState<IsoDate>(today())
   const [period, setPeriod] = useState<Period>({ kind: 'month' })
+  /** Only used by the custom length, where the end is picked rather than derived. */
+  const [customEnd, setCustomEnd] = useState<IsoDate>(addDays(today(), 6))
   const [repeats, setRepeats] = useState(true)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
@@ -41,20 +43,32 @@ export function BudgetSheet({ open, budget, onClose }: BudgetSheetProps) {
       setAmountText(String(toMajor(budget.amount)))
       setStartDate(budget.startDate)
       setPeriod(budget.period)
+      setCustomEnd(budget.endDate)
       setRepeats(budget.repeats === 1)
     } else {
       setName('')
       setAmountText('')
       setStartDate(today())
       setPeriod({ kind: 'month' })
+      setCustomEnd(addDays(today(), 6))
       setRepeats(true)
     }
     setConfirmingDelete(false)
   }, [open, budget])
 
   const amount = parseAmount(amountText)
-  const endDate = deriveEndDate(startDate, period)
+
+  // A custom length is expressed as two dates and stored as a day count, so it
+  // still repeats and rolls like any other period.
+  const custom = period.kind === 'days'
+  const endDate = custom
+    ? customEnd < startDate
+      ? startDate
+      : customEnd
+    : deriveEndDate(startDate, period)
   const days = daysBetween(startDate, endDate)
+  const effectivePeriod: Period = custom ? { kind: 'days', count: days } : period
+
   const perDay = days > 0 && amount > 0 ? Math.floor(amount / days) : 0
   const canSave = amount > 0
 
@@ -66,11 +80,11 @@ export function BudgetSheet({ open, budget, onClose }: BudgetSheetProps) {
         amount,
         startDate,
         endDate,
-        period,
+        period: effectivePeriod,
         repeats: repeats ? 1 : 0,
       })
     } else {
-      await addBudget({ name, amount, startDate, period, repeats })
+      await addBudget({ name, amount, startDate, period: effectivePeriod, repeats })
     }
     onClose()
   }
@@ -114,13 +128,16 @@ export function BudgetSheet({ open, budget, onClose }: BudgetSheetProps) {
             <button
               key={option.kind}
               type="button"
-              onClick={() =>
-                setPeriod(
-                  option.kind === 'days'
-                    ? { kind: 'days', count: days || 30 }
-                    : ({ kind: option.kind } as Period),
-                )
-              }
+              onClick={() => {
+                if (option.kind === 'days') {
+                  // Carry the current end across, so switching to Custom starts
+                  // from what is already on screen rather than resetting it
+                  setCustomEnd(endDate)
+                  setPeriod({ kind: 'days', count: days })
+                } else {
+                  setPeriod({ kind: option.kind } as Period)
+                }
+              }}
               className={[
                 'rounded-xl py-2.5 text-[13px] transition-colors',
                 period.kind === option.kind
@@ -133,49 +150,20 @@ export function BudgetSheet({ open, budget, onClose }: BudgetSheetProps) {
           ))}
         </div>
 
-        {period.kind === 'days' && (
-          <div className="mt-2 flex items-center justify-between rounded-2xl bg-surface-2 px-2 py-2">
-            <Stepper
-              label="−"
-              onPress={() =>
-                setPeriod({ kind: 'days', count: Math.max(1, period.count - 1) })
-              }
+        {/* A month or a week needs only its start — the end follows. A custom
+            length has nothing to derive from, so both dates are picked. */}
+        <SectionLabel>{custom ? 'Dates' : 'Starts'}</SectionLabel>
+        <div className={custom ? 'grid grid-cols-2 gap-2' : ''}>
+          <DateField label="Starts" value={startDate} onChange={setStartDate} />
+          {custom && (
+            <DateField
+              label="Ends"
+              value={endDate}
+              min={startDate}
+              onChange={setCustomEnd}
             />
-            <div className="flex items-baseline gap-1.5">
-              <input
-                type="number"
-                min={1}
-                max={365}
-                value={period.count}
-                onChange={(e) =>
-                  setPeriod({
-                    kind: 'days',
-                    count: Math.min(365, Math.max(1, Number(e.target.value) || 1)),
-                  })
-                }
-                className="tnum w-12 bg-transparent text-center text-[17px] outline-none"
-              />
-              <span className="text-[13px] text-faint">days</span>
-            </div>
-            <Stepper
-              label="+"
-              onPress={() =>
-                setPeriod({ kind: 'days', count: Math.min(365, period.count + 1) })
-              }
-            />
-          </div>
-        )}
-
-        {/* Only the start is asked for — the end always follows from it */}
-        <SectionLabel>Starts</SectionLabel>
-        <label className="block rounded-2xl bg-surface-2 px-4 py-3">
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => e.target.value && setStartDate(e.target.value)}
-            className="tnum w-full bg-transparent text-[15px] outline-none"
-          />
-        </label>
+          )}
+        </div>
 
         <p className="mt-2.5 text-center text-[12.5px] text-faint">
           <span className="text-muted">{formatRange(startDate, endDate)}</span>
@@ -265,15 +253,28 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Stepper({ label, onPress }: { label: string; onPress: () => void }) {
+function DateField({
+  label,
+  value,
+  min,
+  onChange,
+}: {
+  label: string
+  value: IsoDate
+  min?: IsoDate
+  onChange: (value: IsoDate) => void
+}) {
   return (
-    <button
-      type="button"
-      onClick={onPress}
-      className="flex h-9 w-11 items-center justify-center rounded-xl text-[18px] text-muted active:bg-surface-3"
-    >
-      {label}
-    </button>
+    <label className="block rounded-2xl bg-surface-2 px-4 py-2.5">
+      <span className="block text-[11px] text-faint">{label}</span>
+      <input
+        type="date"
+        value={value}
+        min={min}
+        onChange={(e) => e.target.value && onChange(e.target.value)}
+        className="tnum w-full bg-transparent text-[14.5px] outline-none"
+      />
+    </label>
   )
 }
 

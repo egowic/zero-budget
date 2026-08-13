@@ -20,7 +20,7 @@ const DEFAULTS: Pick<Category, 'id' | 'name' | 'icon' | 'color' | 'sortOrder'>[]
   { id: '00000000-0000-4000-8000-000000000016', name: 'Shopping',   icon: '🛍️', color: '#c58acb', sortOrder: 5 },
   { id: '00000000-0000-4000-8000-000000000017', name: 'Car',        icon: '🚗', color: '#7b8fd9', sortOrder: 6 },
   { id: '00000000-0000-4000-8000-000000000018', name: 'Games',      icon: '🎮', color: '#d97b9a', sortOrder: 7 },
-  { id: '00000000-0000-4000-8000-000000000019', name: 'Other',      icon: '📦', color: '#8f93a8', sortOrder: 8 },
+  { id: '00000000-0000-4000-8000-000000000019', name: 'Other',      icon: '🧾', color: '#8f93a8', sortOrder: 8 },
 ]
 
 export const DEFAULT_CATEGORY_IDS: ReadonlySet<string> = new Set(DEFAULTS.map((c) => c.id))
@@ -38,8 +38,15 @@ const RETIRED_IDS = Array.from(
   (_, i) => `00000000-0000-4000-8000-00000000000${i + 1}`,
 )
 
-const SEED_VERSION = 2
+const SEED_VERSION = 3
 
+/**
+ * Installs any built-in category that is missing, and applies one-off
+ * corrections when moving between seed versions.
+ *
+ * Existing rows are never blindly overwritten: icons and names are editable,
+ * so re-running this must not undo a change the user made deliberately.
+ */
 export async function seedIfEmpty(): Promise<void> {
   const seeded = await getMeta('seedVersion', 0)
   if (seeded >= SEED_VERSION) return
@@ -48,8 +55,8 @@ export async function seedIfEmpty(): Promise<void> {
 
   await db.transaction('rw', db.categories, db.expenses, async () => {
     if (seeded < 2) {
-      // Retire the previous defaults and untag anything filed under them, so
-      // no expense is left pointing at a category that no longer exists.
+      // Retire the first draft of the defaults and untag anything filed under
+      // them, so no expense points at a category that no longer exists.
       for (const id of RETIRED_IDS) {
         if (!(await db.categories.get(id))) continue
         await db.categories.delete(id)
@@ -60,11 +67,15 @@ export async function seedIfEmpty(): Promise<void> {
       }
     }
 
-    // `bulkPut`, not `bulkAdd`: if a sync has already pulled these rows down,
-    // seeding must not throw on the key collision.
-    await db.categories.bulkPut(
-      DEFAULTS.map((c) => ({ ...c, createdAt: now, updatedAt: now, deleted: 0 as const })),
-    )
+    if (seeded === 2) {
+      // The box read as "parcel" rather than "miscellaneous"
+      await db.categories.update(OTHER_CATEGORY_ID, { icon: '🧾', updatedAt: now })
+    }
+
+    for (const category of DEFAULTS) {
+      if (await db.categories.get(category.id)) continue
+      await db.categories.put({ ...category, createdAt: now, updatedAt: now, deleted: 0 })
+    }
   })
 
   await setMeta('seedVersion', SEED_VERSION)

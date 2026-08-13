@@ -68,6 +68,7 @@ export function CategoriesSheet({ open, onClose }: CategoriesSheetProps) {
                 setPendingDelete(null)
               }}
               onRename={(value) => void updateCategory(category.id, { name: value })}
+              onChangeIcon={(value) => void updateCategory(category.id, { icon: value })}
             />
           ))}
         </div>
@@ -141,8 +142,9 @@ export function CategoriesSheet({ open, onClose }: CategoriesSheetProps) {
         )}
 
         <p className="mt-3 px-1 text-[11.5px] leading-relaxed text-faint">
-          The nine built-in categories stay put. Deleting one of your own keeps its
-          expenses — they simply lose the label.
+          Tap any emoji or name to change it. The nine built-in categories cannot be
+          removed; deleting one of your own keeps its expenses, which fall back to
+          Other.
         </p>
       </div>
     </Sheet>
@@ -157,6 +159,7 @@ function CategoryRow({
   onCancelDelete,
   onDelete,
   onRename,
+  onChangeIcon,
 }: {
   category: Category
   divided: boolean
@@ -165,6 +168,7 @@ function CategoryRow({
   onCancelDelete: () => void
   onDelete: () => void
   onRename: (name: string) => void
+  onChangeIcon: (icon: string) => void
 }) {
   const [draft, setDraft] = useState(category.name)
   const builtIn = isBuiltInCategory(category.id)
@@ -176,12 +180,18 @@ function CategoryRow({
         divided ? 'border-t border-hairline' : '',
       ].join(' ')}
     >
-      <span
-        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full text-[18px]"
+      {/* Editable even for built-ins: they cannot be removed, but nothing is
+          gained by forcing someone to live with an emoji they dislike. */}
+      <input
+        value={category.icon}
+        onChange={(e) => {
+          const next = firstGrapheme(e.target.value)
+          if (next && next !== category.icon) onChangeIcon(next)
+        }}
+        aria-label={`${category.name} emoji`}
+        className="h-[38px] w-[38px] shrink-0 rounded-full text-center text-[18px] outline-none"
         style={{ background: `${category.color}2b` }}
-      >
-        {category.icon}
-      </span>
+      />
 
       <input
         value={draft}
