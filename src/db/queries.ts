@@ -14,7 +14,15 @@ import type { Minor } from '../lib/money'
 export function useCategories(): Category[] {
   return (
     useLiveQuery(
-      () => db.categories.where('deleted').equals(0).sortBy('sortOrder'),
+      async () => {
+        const categories = await db.categories.where('deleted').equals(0).toArray()
+        return categories.sort(
+          (a, b) =>
+            a.sortOrder - b.sortOrder ||
+            a.createdAt - b.createdAt ||
+            a.id.localeCompare(b.id),
+        )
+      },
       [],
       [] as Category[],
     ) ?? []

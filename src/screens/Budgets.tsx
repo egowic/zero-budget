@@ -3,7 +3,7 @@ import { ProgressBar } from '../components/ProgressBar'
 import { SyncDot } from '../components/SyncDot'
 import { BudgetSheet } from './BudgetSheet'
 import { useBudgetStatuses } from '../db/queries'
-import { STATE_COLOR, type BudgetStatus } from '../lib/budget'
+import { formatPercentUsed, STATE_COLOR, type BudgetStatus } from '../lib/budget'
 import { formatMoney } from '../lib/money'
 import { formatDate } from '../lib/dates'
 import type { Budget } from '../db/schema'
@@ -136,7 +136,7 @@ function BudgetCard({
       <div className="mt-2.5 flex items-center justify-between text-[11.5px] text-faint">
         <span>{formatDate(budget.startDate, { withYear: true })}</span>
         <span className="tnum" style={{ color }}>
-          {percentUsed.toFixed(percentUsed < 10 ? 1 : 0)}%
+          {formatPercentUsed(percentUsed)}
         </span>
         <span>{formatDate(budget.endDate, { withYear: true })}</span>
       </div>

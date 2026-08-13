@@ -1,5 +1,5 @@
 import { ProgressBar } from './ProgressBar'
-import { STATE_COLOR } from '../lib/budget'
+import { formatPercentUsed, STATE_COLOR } from '../lib/budget'
 import type { BudgetStatus } from '../lib/budget'
 import { formatMoney } from '../lib/money'
 import { formatRange } from '../lib/dates'
@@ -59,8 +59,13 @@ export function BudgetHero({ status, onSwitch }: BudgetHeroProps) {
         </span>
       </div>
 
-      <div className="mt-1 text-[12.5px] text-faint">
-        {formatMoney(status.spent)} spent of {formatMoney(budget.amount)}
+      <div className="mt-1 flex items-center justify-between gap-3 text-[12.5px] text-faint">
+        <span>
+          {formatMoney(status.spent)} spent of {formatMoney(budget.amount)}
+        </span>
+        <span className="tnum shrink-0" style={{ color }}>
+          {formatPercentUsed(percentUsed)}
+        </span>
       </div>
 
       <div className="mt-4">

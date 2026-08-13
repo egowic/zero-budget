@@ -229,6 +229,43 @@ export async function updateCategory(
 }
 
 /**
+ * Persists the visible category order and queues every changed row for sync.
+ * Missing IDs are appended defensively, so a category arriving from another
+ * device during a drag cannot disappear from the local ordering.
+ */
+export async function reorderCategories(orderedIds: string[]): Promise<void> {
+  await db.transaction('rw', db.categories, db.outbox, async () => {
+    const active = (await db.categories.where('deleted').equals(0).toArray()).sort(
+      (a, b) =>
+        a.sortOrder - b.sortOrder ||
+        a.createdAt - b.createdAt ||
+        a.id.localeCompare(b.id),
+    )
+    const byId = new Map(active.map((category) => [category.id, category]))
+    const seen = new Set<string>()
+    const ordered: Category[] = []
+
+    for (const id of orderedIds) {
+      const category = byId.get(id)
+      if (category && !seen.has(id)) {
+        ordered.push(category)
+        seen.add(id)
+      }
+    }
+    for (const category of active) {
+      if (!seen.has(category.id)) ordered.push(category)
+    }
+
+    const now = Date.now()
+    for (const [sortOrder, category] of ordered.entries()) {
+      if (category.sortOrder === sortOrder) continue
+      await db.categories.update(category.id, { sortOrder, updatedAt: now })
+      await enqueue('categories', category.id)
+    }
+  })
+}
+
+/**
  * Built-in categories are refused rather than silently ignored, so a caller
  * that gets this wrong fails loudly instead of appearing to work.
  */

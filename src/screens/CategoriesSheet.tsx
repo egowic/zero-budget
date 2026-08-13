@@ -1,7 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Sheet } from '../components/Sheet'
 import { useCategories } from '../db/queries'
-import { addCategory, deleteCategory, updateCategory } from '../db/mutations'
+import {
+  addCategory,
+  deleteCategory,
+  reorderCategories,
+  updateCategory,
+} from '../db/mutations'
 import { isBuiltInCategory } from '../db/seed'
 import type { Category } from '../db/schema'
 
@@ -33,8 +38,23 @@ export function CategoriesSheet({ open, onClose }: CategoriesSheetProps) {
   const [name, setName] = useState('')
   const [color, setColor] = useState(PALETTE[0])
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [draftOrder, setDraftOrder] = useState<string[] | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const orderRef = useRef<string[] | null>(null)
+  const draggingIdRef = useRef<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const canAdd = name.trim().length > 0 && icon.length > 0
+  const categoryById = new Map(categories.map((category) => [category.id, category]))
+  const displayedCategories = draftOrder
+    ? [
+        ...draftOrder.flatMap((id) => {
+          const category = categoryById.get(id)
+          return category ? [category] : []
+        }),
+        ...categories.filter((category) => !draftOrder.includes(category.id)),
+      ]
+    : categories
 
   function resetForm() {
     setAdding(false)
@@ -49,17 +69,93 @@ export function CategoriesSheet({ open, onClose }: CategoriesSheetProps) {
     resetForm()
   }
 
+  function startReorder(id: string, event: ReactPointerEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    const order = displayedCategories.map((category) => category.id)
+    orderRef.current = order
+    draggingIdRef.current = id
+    setDraftOrder(order)
+    setDraggingId(id)
+  }
+
+  function continueReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    const id = draggingIdRef.current
+    const current = orderRef.current
+    if (!id || !current) return
+
+    const scroller = scrollRef.current
+    if (scroller) {
+      const bounds = scroller.getBoundingClientRect()
+      if (event.clientY < bounds.top + 44) scroller.scrollTop -= 12
+      if (event.clientY > bounds.bottom - 44) scroller.scrollTop += 12
+    }
+
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-category-id]')
+      ?.dataset.categoryId
+    if (!target || target === id) return
+
+    const from = current.indexOf(id)
+    const to = current.indexOf(target)
+    if (from < 0 || to < 0) return
+
+    const next = [...current]
+    next.splice(from, 1)
+    next.splice(to, 0, id)
+    orderRef.current = next
+    setDraftOrder(next)
+  }
+
+  async function finishReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!draggingIdRef.current) return
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+
+    const order = orderRef.current
+    draggingIdRef.current = null
+    setDraggingId(null)
+    try {
+      if (order) await reorderCategories(order)
+    } finally {
+      orderRef.current = null
+      setDraftOrder(null)
+    }
+  }
+
+  async function moveWithKeyboard(id: string, direction: -1 | 1) {
+    const order = displayedCategories.map((category) => category.id)
+    const from = order.indexOf(id)
+    const to = from + direction
+    if (from < 0 || to < 0 || to >= order.length) return
+    ;[order[from], order[to]] = [order[to], order[from]]
+    orderRef.current = order
+    setDraftOrder(order)
+    try {
+      await reorderCategories(order)
+    } finally {
+      orderRef.current = null
+      setDraftOrder(null)
+    }
+  }
+
   return (
     <Sheet open={open} onClose={onClose}>
-      <div className="safe-bottom hide-scrollbar max-h-[80vh] overflow-y-auto px-4 pt-2 pb-4">
+      <div
+        ref={scrollRef}
+        className="safe-bottom hide-scrollbar max-h-[80vh] overflow-y-auto px-4 pt-2 pb-4"
+      >
         <div className="pb-4 text-center text-[15px] font-medium">Categories</div>
 
         <div className="overflow-hidden rounded-2xl bg-surface-2">
-          {categories.map((category, i) => (
+          {displayedCategories.map((category, i) => (
             <CategoryRow
               key={category.id}
               category={category}
               divided={i > 0}
+              dragging={draggingId === category.id}
               confirming={pendingDelete === category.id}
               onConfirmDelete={() => setPendingDelete(category.id)}
               onCancelDelete={() => setPendingDelete(null)}
@@ -69,6 +165,10 @@ export function CategoriesSheet({ open, onClose }: CategoriesSheetProps) {
               }}
               onRename={(value) => void updateCategory(category.id, { name: value })}
               onChangeIcon={(value) => void updateCategory(category.id, { icon: value })}
+              onReorderStart={(event) => startReorder(category.id, event)}
+              onReorderMove={continueReorder}
+              onReorderEnd={(event) => void finishReorder(event)}
+              onReorderKey={(direction) => void moveWithKeyboard(category.id, direction)}
             />
           ))}
         </div>
@@ -142,9 +242,9 @@ export function CategoriesSheet({ open, onClose }: CategoriesSheetProps) {
         )}
 
         <p className="mt-3 px-1 text-[11.5px] leading-relaxed text-faint">
-          Tap any emoji or name to change it. The nine built-in categories cannot be
-          removed; deleting one of your own keeps its expenses, which fall back to
-          Other.
+          Drag the handle to set the order used when adding an expense. Tap any emoji
+          or name to change it. The nine built-in categories cannot be removed;
+          deleting one of your own keeps its expenses, which fall back to Other.
         </p>
       </div>
     </Sheet>
@@ -154,30 +254,42 @@ export function CategoriesSheet({ open, onClose }: CategoriesSheetProps) {
 function CategoryRow({
   category,
   divided,
+  dragging,
   confirming,
   onConfirmDelete,
   onCancelDelete,
   onDelete,
   onRename,
   onChangeIcon,
+  onReorderStart,
+  onReorderMove,
+  onReorderEnd,
+  onReorderKey,
 }: {
   category: Category
   divided: boolean
+  dragging: boolean
   confirming: boolean
   onConfirmDelete: () => void
   onCancelDelete: () => void
   onDelete: () => void
   onRename: (name: string) => void
   onChangeIcon: (icon: string) => void
+  onReorderStart: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onReorderMove: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onReorderEnd: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onReorderKey: (direction: -1 | 1) => void
 }) {
   const [draft, setDraft] = useState(category.name)
   const builtIn = isBuiltInCategory(category.id)
 
   return (
     <div
+      data-category-id={category.id}
       className={[
-        'flex items-center gap-3 px-3 py-2.5',
+        'flex items-center gap-2.5 px-3 py-2.5 transition-colors',
         divided ? 'border-t border-hairline' : '',
+        dragging ? 'bg-surface-3' : '',
       ].join(' ')}
     >
       {/* Editable even for built-ins: they cannot be removed, but nothing is
@@ -239,6 +351,37 @@ function CategoryRow({
           </svg>
         </button>
       )}
+
+      <button
+        type="button"
+        aria-label={`Reorder ${category.name}`}
+        aria-roledescription="sortable"
+        onPointerDown={onReorderStart}
+        onPointerMove={onReorderMove}
+        onPointerUp={onReorderEnd}
+        onPointerCancel={onReorderEnd}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            onReorderKey(-1)
+          }
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            onReorderKey(1)
+          }
+        }}
+        className="flex h-8 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-faint active:cursor-grabbing active:bg-surface-3"
+        style={{ touchAction: 'none' }}
+      >
+        <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden>
+          <circle cx="4" cy="4" r="1.25" />
+          <circle cx="10" cy="4" r="1.25" />
+          <circle cx="4" cy="9" r="1.25" />
+          <circle cx="10" cy="9" r="1.25" />
+          <circle cx="4" cy="14" r="1.25" />
+          <circle cx="10" cy="14" r="1.25" />
+        </svg>
+      </button>
     </div>
   )
 }

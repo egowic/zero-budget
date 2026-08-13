@@ -122,3 +122,8 @@ export const STATE_COLOR_DIM: Record<BudgetState, string> = {
   watch: 'var(--color-warn-dim)',
   over: 'var(--color-over-dim)',
 }
+
+/** Keeps the percentage label identical on the Activity and Budgets cards. */
+export function formatPercentUsed(percentUsed: number): string {
+  return `${percentUsed.toFixed(percentUsed < 10 ? 1 : 0)}%`
+}

@@ -227,6 +227,25 @@ Safari sekmesinde hem de mevcut Ana Ekran PWA'sında gerçek cihaz testi yapılm
   iOS sürümlerinde yeni worker'ın görünmesi için uygulamayı tamamen kapatıp bir
   veya iki kez yeniden açmak gerekebilir.
 
+### 3.7 Kategori sıralaması ve Activity bütçe yüzdesi
+
+- Settings → Categories satırlarına iPhone dokunmatiğiyle çalışan sürükleme
+  tutamaçları eklendi. Klavye erişilebilirliği için tutamaç odaktayken yukarı/aşağı
+  ok tuşları da aynı sıralama işlemini yapar.
+- Yeni sıra mevcut `Category.sortOrder` alanına yazılır; değişen kategori satırları
+  aynı Dexie transaction'ında outbox'a eklenir ve Supabase'e senkron olur.
+- Sıralama sorgusuna `sortOrder`, `createdAt`, `id` tie-break zinciri eklendi;
+  eşit sıra değerlerinde dahi görünüm deterministiktir.
+- Hem yeni expense hem mevcut expense düzenleme ekranı ortak `useCategories()`
+  kaynağını kullandığından kategori grid'leri Settings'teki sırayı doğrudan izler.
+- Dokuz built-in kategorinin silinme koruması aynen bırakıldı. Custom kategori
+  ekleme ve yalnızca custom kategoriyi silme davranışı değişmedi.
+- Activity ekranındaki ana budget kartına Budgets ekranıyla aynı harcanan yüzde
+  etiketi eklendi. Yüzde formatı iki ekranda ortak `formatPercentUsed()` helper'ına
+  bağlandı.
+- Bu geliştirmeler yalnızca web/PWA reposuna yapıldı; ayrı native iOS repo bu
+  iterasyonda değiştirilmedi.
+
 ## 4. Mevcut veri ve sync mimarisi
 
 ### Yerel yazma
@@ -930,6 +949,24 @@ Kök neden:
   reset ediliyor.
 - Başka UI veya category davranışı değiştirilmedi.
 - Typecheck, 11 unit test ve production build başarılı tamamlandı.
+
+### 11.17 Kategori sırası ve Activity yüzdesi
+
+Kullanıcı, Settings'teki mevcut kategorilerin silinmemesini, ancak sıralarının
+değiştirilebilmesini; expense girerken çıkan kategori grid'inin de aynı sırayı
+kullanmasını istedi. Var olan modelde kategori başına tek kez saklanan `icon`,
+`name`, `color` ve `sortOrder` alanlarının bulunduğu; expense satırının bunları
+tekrar yazmak yerine yalnızca `categoryId` tuttuğu açıklandı.
+
+Mevcut `sortOrder` alanının Supabase `categories.sort_order` kolonuyla push ve pull
+yönlerinde zaten eşlendiği doğrulandı. Yeni migration açmadan, iOS dokunmatiğine
+uygun pointer-capture tabanlı sürükleme tutamacı ve outbox'a dahil kalıcı reorder
+mutation'ı eklendi. Built-in silme yasağı ile custom ekleme/silme davranışı korundu.
+
+Aynı istekte Budgets kartında bulunan harcanan yüzde bilgisinin Activity'deki ana
+budget kartında da gösterilmesi istendi. Activity kartında spent/total satırının
+sağına aynı renk ve formatta yüzde eklendi; iki ekran ortak formatter kullanıyor.
+Native iOS repo bu değişikliklerin kapsamı dışında bırakıldı.
 
 ## 12. Konuşulan fakat bilinçli olarak uygulanmayan işler
 
