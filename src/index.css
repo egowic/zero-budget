@@ -125,19 +125,10 @@
   .ios-clipped-standalone .app-tabbar .safe-bottom.pb-2 {
     padding-bottom: 0;
   }
-  /* iOS 27's scroll-edge effect can blur the first controls below the status
-     bar. A fixed, same-colour edge suppresses that effect without moving or
-     restyling the header itself. */
-  .ios-clipped-standalone body::before {
-    position: fixed;
-    z-index: 50;
-    top: 0;
-    right: 0;
-    left: 0;
-    height: 1px;
-    background: var(--color-ink);
-    content: '';
-    pointer-events: none;
+  /* Keep the two top-bar controls below iOS 27's system scroll-edge shadow.
+     This is standalone-only; Safari retains the original spacing. */
+  .ios-clipped-standalone .app-header.safe-top.pt-3 {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1.75rem);
   }
 
   .hide-scrollbar::-webkit-scrollbar {

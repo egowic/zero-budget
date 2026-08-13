@@ -24,7 +24,7 @@ export function Timeline({ onCreateBudget, onOpenSettings }: TimelineProps) {
 
   return (
     <div className="min-h-full pb-32">
-      <header className="safe-top flex items-center justify-between px-4 pt-3 pb-4">
+      <header className="app-header safe-top flex items-center justify-between px-4 pt-3 pb-4">
         <h1 className="text-[15px] font-semibold tracking-tight text-muted">Activity</h1>
         <button
           type="button"
