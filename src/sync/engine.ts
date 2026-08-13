@@ -1,5 +1,5 @@
 import { supabase } from './client'
-import { currentUserId, ensureSession } from './auth'
+import { currentUserId } from './auth'
 import { db, getMeta, setMeta, type Budget, type Category, type Expense } from '../db/schema'
 
 /**
@@ -243,12 +243,10 @@ export async function sync(): Promise<void> {
       return
     }
 
-    // Do not create an anonymous account just because somebody opened the
-    // deployed URL. Existing users still pull immediately; a new account is
-    // created only after a real local mutation has entered the outbox.
-    const existingUserId = await currentUserId()
-    const userId =
-      existingUserId ?? ((await db.outbox.count()) > 0 ? await ensureSession() : null)
+    // Identity is explicit now: local changes wait safely in the outbox until
+    // the persisted email session is available. Never create a second,
+    // anonymous cloud identity behind the login screen.
+    const userId = await currentUserId()
     if (!userId) {
       setStatus({ state: 'idle' })
       return

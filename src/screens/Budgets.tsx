@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ProgressBar } from '../components/ProgressBar'
+import { SyncDot } from '../components/SyncDot'
 import { BudgetSheet } from './BudgetSheet'
 import { useBudgetStatuses } from '../db/queries'
 import { STATE_COLOR, type BudgetStatus } from '../lib/budget'
@@ -17,9 +18,12 @@ export function Budgets({ createOpen, onCreateOpenChange }: BudgetsProps) {
   const [editing, setEditing] = useState<Budget | null>(null)
 
   return (
-    <div className="min-h-full pb-32">
+    <div className="app-screen min-h-full pb-32">
       <header className="app-header safe-top flex items-center justify-between px-4 pt-3 pb-4">
-        <h1 className="text-[15px] font-semibold tracking-tight text-muted">Budgets</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-[15px] font-semibold tracking-tight text-muted">Budgets</h1>
+          <SyncDot />
+        </div>
         <button
           type="button"
           onClick={() => onCreateOpenChange(true)}

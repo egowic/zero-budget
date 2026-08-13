@@ -14,13 +14,12 @@ export const supabase: SupabaseClient | null =
   url && anonKey
     ? createClient(url, anonKey, {
         auth: {
-          // The session must survive an app relaunch, and refresh itself
-          // without ever putting a login screen in front of the user.
+          // Login is required only when this device has no session. After that,
+          // the session survives app relaunches and refreshes in the background.
           persistSession: true,
           autoRefreshToken: true,
           storageKey: 'zero.auth',
-          // Nothing arrives via redirect — there is no login flow to return
-          // from — and leaving this on makes Supabase parse the URL on boot.
+          // Password login has no redirect for Supabase to parse on boot.
           detectSessionInUrl: false,
         },
       })

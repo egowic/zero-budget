@@ -125,10 +125,20 @@
   .ios-clipped-standalone .app-tabbar .safe-bottom.pb-2 {
     padding-bottom: 0;
   }
-  /* Keep the two top-bar controls below iOS 27's system scroll-edge shadow.
-     This is standalone-only; Safari retains the original spacing. */
-  .ios-clipped-standalone .app-header.safe-top.pt-3 {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 1.75rem);
+  /* iOS 27's scroll-edge shadow follows normal page content even when extra
+     spacing is added. A real viewport-constrained, opaque header makes WebKit
+     treat the top edge as owned by the app and replaces that effect with the
+     app's solid background. The screen padding reserves the header's space. */
+  .ios-clipped-standalone .app-header {
+    position: fixed;
+    z-index: 45;
+    top: 0;
+    right: 0;
+    left: 0;
+    background: var(--color-ink);
+  }
+  .ios-clipped-standalone .app-screen {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 3.75rem);
   }
 
   .hide-scrollbar::-webkit-scrollbar {
