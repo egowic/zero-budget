@@ -20,7 +20,7 @@ const DEFAULTS: Pick<Category, 'id' | 'name' | 'icon' | 'color' | 'sortOrder'>[]
   { id: '00000000-0000-4000-8000-000000000016', name: 'Shopping',   icon: '🛍️', color: '#c58acb', sortOrder: 5 },
   { id: '00000000-0000-4000-8000-000000000017', name: 'Car',        icon: '🚗', color: '#7b8fd9', sortOrder: 6 },
   { id: '00000000-0000-4000-8000-000000000018', name: 'Games',      icon: '🎮', color: '#d97b9a', sortOrder: 7 },
-  { id: '00000000-0000-4000-8000-000000000019', name: 'Other',      icon: '🧾', color: '#8f93a8', sortOrder: 8 },
+  { id: '00000000-0000-4000-8000-000000000019', name: 'Other',      icon: '❔', color: '#8f93a8', sortOrder: 8 },
 ]
 
 export const DEFAULT_CATEGORY_IDS: ReadonlySet<string> = new Set(DEFAULTS.map((c) => c.id))
@@ -38,7 +38,7 @@ const RETIRED_IDS = Array.from(
   (_, i) => `00000000-0000-4000-8000-00000000000${i + 1}`,
 )
 
-const SEED_VERSION = 3
+const SEED_VERSION = 4
 
 /**
  * Installs any built-in category that is missing, and applies one-off
@@ -67,9 +67,10 @@ export async function seedIfEmpty(): Promise<void> {
       }
     }
 
-    if (seeded === 2) {
-      // The box read as "parcel" rather than "miscellaneous"
-      await db.categories.update(OTHER_CATEGORY_ID, { icon: '🧾', updatedAt: now })
+    if (seeded > 0 && seeded < 4) {
+      // Neither a box nor a receipt reads as "uncategorised" — both name a
+      // specific object. A question mark is the only one that says nothing.
+      await db.categories.update(OTHER_CATEGORY_ID, { icon: '❔', updatedAt: now })
     }
 
     for (const category of DEFAULTS) {
