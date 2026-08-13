@@ -259,6 +259,10 @@ Safari sekmesinde hem de mevcut Ana Ekran PWA'sında gerçek cihaz testi yapılm
   ve yatay konumu kart kenarları içinde clamp edilir; tutar/yüzde satırlarıyla
   çakışmaz. Upcoming ve ended bütçelerde etiket gösterilmez. Harcanan yüzde barın
   içine taşınmadı; mevcut spent/total satırının sağında kaldı.
+- Activity'deki seçili budget kartının yapısı ve budget-switch davranışı korunarak
+  görsel ölçeği Budgets kartlarına yaklaştırıldı: ana kalan tutar 42 px'ten 28 px'e,
+  günlük limit ve kalan zaman değerleri 22 px'ten 16 px'e indirildi; dikey aralıklar
+  hafifçe sıkılaştırıldı.
 - Bu geliştirmeler yalnızca web/PWA reposuna yapıldı; ayrı native iOS repo bu
   iterasyonda değiştirilmedi.
 

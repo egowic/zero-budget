@@ -47,14 +47,14 @@ export function BudgetHero({ status, onSwitch }: BudgetHeroProps) {
         </span>
       </button>
 
-      <div className="mt-2.5 flex items-baseline gap-2">
+      <div className="mt-2.5 flex items-baseline gap-1.5">
         <span
-          className="tnum text-[42px] leading-none font-light tracking-tight"
+          className="tnum text-[28px] leading-none font-light"
           style={{ color: status.state === 'over' ? 'var(--color-over)' : undefined }}
         >
           {formatMoney(remaining)}
         </span>
-        <span className="text-[13px] text-faint">
+        <span className="text-[12.5px] text-faint">
           {remaining < 0 ? 'over' : 'left'}
         </span>
       </div>
@@ -68,7 +68,7 @@ export function BudgetHero({ status, onSwitch }: BudgetHeroProps) {
         </span>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3.5">
         <ProgressBar
           percent={percentUsed}
           color={color}
@@ -77,13 +77,13 @@ export function BudgetHero({ status, onSwitch }: BudgetHeroProps) {
         />
       </div>
 
-      <div className="mt-4 flex items-end justify-between border-t border-hairline pt-3.5">
+      <div className="mt-3 flex items-end justify-between border-t border-hairline pt-3">
         <div>
           <div className="text-[10.5px] tracking-[0.08em] text-faint uppercase">
             Daily limit
           </div>
-          <div className="mt-1.5 flex items-baseline gap-1.5">
-            <span className="tnum text-[22px] leading-none font-normal" style={{ color }}>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="tnum text-[16px] leading-none font-normal" style={{ color }}>
               {dailyAllowance === null ? '—' : formatMoney(dailyAllowance)}
             </span>
             {dailyAllowance !== null && (
@@ -96,7 +96,7 @@ export function BudgetHero({ status, onSwitch }: BudgetHeroProps) {
           <div className="text-[10.5px] tracking-[0.08em] text-faint uppercase">
             Time left
           </div>
-          <div className="mt-1.5 tnum text-[22px] leading-none font-normal text-muted">
+          <div className="mt-1 tnum text-[16px] leading-none font-normal text-muted">
             {status.phase === 'ended'
               ? 'Ended'
               : status.phase === 'upcoming'
