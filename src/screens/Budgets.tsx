@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ProgressBar } from '../components/ProgressBar'
 import { SyncDot } from '../components/SyncDot'
 import { BudgetSheet } from './BudgetSheet'
-import { useBudgetStatuses } from '../db/queries'
+import { useOrderedBudgetStatuses } from '../db/queries'
+import { reorderBudgets } from '../db/mutations'
 import { formatPercentUsed, STATE_COLOR, type BudgetStatus } from '../lib/budget'
 import { formatMoney } from '../lib/money'
 import { formatDate } from '../lib/dates'
@@ -14,8 +15,161 @@ interface BudgetsProps {
 }
 
 export function Budgets({ createOpen, onCreateOpenChange }: BudgetsProps) {
-  const statuses = useBudgetStatuses()
+  const statuses = useOrderedBudgetStatuses()
   const [editing, setEditing] = useState<Budget | null>(null)
+  const [draftOrder, setDraftOrder] = useState<string[] | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const orderRef = useRef<string[] | null>(null)
+  const draggingIdRef = useRef<string | null>(null)
+  const gestureRef = useRef<{
+    id: string
+    pointerId: number
+    startX: number
+    startY: number
+    target: HTMLButtonElement
+  } | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suppressClickRef = useRef(false)
+  const touchMoveBlockerRef = useRef<((event: TouchEvent) => void) | null>(null)
+
+  const statusById = new Map(statuses.map((status) => [status.budget.id, status]))
+  const displayedStatuses = draftOrder
+    ? [
+        ...draftOrder.flatMap((id) => {
+          const status = statusById.get(id)
+          return status ? [status] : []
+        }),
+        ...statuses.filter((status) => !draftOrder.includes(status.budget.id)),
+      ]
+    : statuses
+
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current !== null) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  function stopBlockingTouchMove() {
+    const blocker = touchMoveBlockerRef.current
+    if (blocker) document.removeEventListener('touchmove', blocker)
+    touchMoveBlockerRef.current = null
+  }
+
+  useEffect(
+    () => () => {
+      clearLongPressTimer()
+      stopBlockingTouchMove()
+    },
+    [],
+  )
+
+  function beginPress(id: string, event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
+
+    clearLongPressTimer()
+    suppressClickRef.current = false
+    gestureRef.current = {
+      id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      target: event.currentTarget,
+    }
+
+    longPressTimerRef.current = setTimeout(() => {
+      const gesture = gestureRef.current
+      if (!gesture || gesture.id !== id) return
+
+      const order = displayedStatuses.map((status) => status.budget.id)
+      orderRef.current = order
+      draggingIdRef.current = id
+      suppressClickRef.current = true
+      setDraftOrder(order)
+      setDraggingId(id)
+
+      try {
+        gesture.target.setPointerCapture(gesture.pointerId)
+      } catch {
+        // The pointer can disappear between the timer firing and capture.
+      }
+
+      const blocker = (touchEvent: TouchEvent) => touchEvent.preventDefault()
+      touchMoveBlockerRef.current = blocker
+      document.addEventListener('touchmove', blocker, { passive: false })
+      navigator.vibrate?.(8)
+    }, 380)
+  }
+
+  function movePress(event: ReactPointerEvent<HTMLButtonElement>) {
+    const gesture = gestureRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+
+    if (!draggingIdRef.current) {
+      const moved = Math.hypot(
+        event.clientX - gesture.startX,
+        event.clientY - gesture.startY,
+      )
+      if (moved > 10) {
+        clearLongPressTimer()
+        suppressClickRef.current = true
+      }
+      return
+    }
+
+    event.preventDefault()
+    if (event.clientY < 120) window.scrollBy(0, -10)
+    if (event.clientY > window.innerHeight - 140) window.scrollBy(0, 10)
+
+    const draggedId = draggingIdRef.current
+    const current = orderRef.current
+    const targetId = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-budget-id]')
+      ?.dataset.budgetId
+    if (!current || !targetId || targetId === draggedId) return
+
+    const from = current.indexOf(draggedId)
+    const to = current.indexOf(targetId)
+    if (from < 0 || to < 0) return
+
+    const next = [...current]
+    next.splice(from, 1)
+    next.splice(to, 0, draggedId)
+    orderRef.current = next
+    setDraftOrder(next)
+  }
+
+  async function endPress(event: ReactPointerEvent<HTMLButtonElement>) {
+    const gesture = gestureRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+
+    clearLongPressTimer()
+    gestureRef.current = null
+    const wasDragging = draggingIdRef.current !== null
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+
+    if (wasDragging) {
+      event.preventDefault()
+      const order = orderRef.current
+      draggingIdRef.current = null
+      setDraggingId(null)
+      stopBlockingTouchMove()
+      try {
+        if (order) await reorderBudgets(order)
+      } finally {
+        orderRef.current = null
+        setDraftOrder(null)
+      }
+    }
+
+    setTimeout(() => {
+      suppressClickRef.current = false
+    }, 0)
+  }
 
   return (
     <div className="app-screen min-h-full pb-32">
@@ -50,12 +204,18 @@ export function Budgets({ createOpen, onCreateOpenChange }: BudgetsProps) {
             </button>
           </div>
         ) : (
-          statuses.map((status, i) => (
+          displayedStatuses.map((status, i) => (
             <BudgetCard
               key={status.budget.id}
               status={status}
               index={i}
-              onEdit={() => setEditing(status.budget)}
+              dragging={draggingId === status.budget.id}
+              onEdit={() => {
+                if (!suppressClickRef.current) setEditing(status.budget)
+              }}
+              onPointerDown={(event) => beginPress(status.budget.id, event)}
+              onPointerMove={movePress}
+              onPointerEnd={(event) => void endPress(event)}
             />
           ))
         )}
@@ -88,11 +248,19 @@ function repeatLabel(budget: Budget): string | null {
 function BudgetCard({
   status,
   index,
+  dragging,
   onEdit,
+  onPointerDown,
+  onPointerMove,
+  onPointerEnd,
 }: {
   status: BudgetStatus
   index: number
+  dragging: boolean
   onEdit: () => void
+  onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onPointerEnd: (event: ReactPointerEvent<HTMLButtonElement>) => void
 }) {
   const { budget, remaining, percentUsed, percentTime, dailyAllowance, phase } = status
   const color = STATE_COLOR[status.state]
@@ -101,9 +269,23 @@ function BudgetCard({
   return (
     <button
       type="button"
+      data-budget-id={budget.id}
       onClick={onEdit}
-      className="animate-rise-in block w-full rounded-[var(--radius-card)] bg-surface px-5 py-4 text-left active:bg-surface-2"
-      style={{ animationDelay: `${Math.min(index, 6) * 35}ms` }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
+      onContextMenu={(event) => event.preventDefault()}
+      className={[
+        'animate-rise-in block w-full touch-pan-y select-none rounded-[var(--radius-card)]',
+        'bg-surface px-5 py-4 text-left transition-[transform,box-shadow,opacity] duration-150',
+        'active:bg-surface-2',
+        dragging ? 'relative z-10 scale-[1.015] bg-surface-2 shadow-2xl' : '',
+      ].join(' ')}
+      style={{
+        animationDelay: `${Math.min(index, 6) * 35}ms`,
+        WebkitTouchCallout: 'none',
+      }}
     >
       <div className="flex items-center gap-2">
         <span className="text-[15px] font-medium">{budget.name}</span>

@@ -140,6 +140,12 @@ export async function deleteBudget(id: string): Promise<void> {
   })
 }
 
+/** Stores the Budgets-screen card order as a local display preference. */
+export async function reorderBudgets(orderedIds: string[]): Promise<void> {
+  const uniqueIds = [...new Set(orderedIds)]
+  await db.meta.put({ key: 'budgetOrder', value: uniqueIds })
+}
+
 /** The start date of the period following `startDate`. */
 export function nextStart(startDate: IsoDate, period: Period): IsoDate {
   switch (period.kind) {

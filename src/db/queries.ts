@@ -74,6 +74,28 @@ export function useBudgetStatuses(): BudgetStatus[] {
   )
 }
 
+/** Budgets-screen order, independent from Activity's primary-budget priority. */
+export function useOrderedBudgetStatuses(): BudgetStatus[] {
+  const statuses = useBudgetStatuses()
+  const orderedIds =
+    useLiveQuery(
+      async () => {
+        const value = (await db.meta.get('budgetOrder'))?.value
+        return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+      },
+      [],
+      [] as string[],
+    ) ?? []
+
+  const rank = new Map(orderedIds.map((id, index) => [id, index]))
+  const fallback = new Map(statuses.map((status, index) => [status.budget.id, index]))
+  return [...statuses].sort(
+    (a, b) =>
+      (rank.get(a.budget.id) ?? orderedIds.length + (fallback.get(a.budget.id) ?? 0)) -
+      (rank.get(b.budget.id) ?? orderedIds.length + (fallback.get(b.budget.id) ?? 0)),
+  )
+}
+
 /** Every budget whose period covers `date`, tightest period first. */
 export function coveringBudgets(statuses: BudgetStatus[], date: IsoDate): BudgetStatus[] {
   return statuses
