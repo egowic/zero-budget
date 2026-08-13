@@ -65,14 +65,14 @@ export function BudgetHero({ status, onSwitch }: BudgetHeroProps) {
         </span>
       </div>
 
-      <div className="mt-3.5">
+      <div className="mt-2.5">
         <ProgressBar
           percent={percentUsed}
           color={color}
           paceMarker={percentTime * 100}
           paceLabel={status.phase === 'active' ? 'Today' : undefined}
           valueLabel={formatPercentUsed(percentUsed)}
-          height={18}
+          height={22}
         />
       </div>
 
