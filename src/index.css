@@ -130,7 +130,7 @@
      actual standalone display mode and keep the header controls below that
      system-owned layer. */
   .standalone-web-app .app-header.safe-top.pt-3 {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 1.4375rem);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);
   }
 
   .hide-scrollbar::-webkit-scrollbar {
