@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Sheet } from '../components/Sheet'
 import { CategoryGrid } from '../components/CategoryGrid'
 import { useCategories } from '../db/queries'
@@ -20,11 +19,6 @@ interface ExpenseDetailSheetProps {
  */
 export function ExpenseDetailSheet({ expense, onClose }: ExpenseDetailSheetProps) {
   const categories = useCategories()
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
-
-  useEffect(() => {
-    if (!expense) setConfirmingDelete(false)
-  }, [expense])
 
   if (!expense) return null
 
@@ -69,32 +63,13 @@ export function ExpenseDetailSheet({ expense, onClose }: ExpenseDetailSheetProps
         />
 
         <div className="mt-6">
-          {confirmingDelete ? (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmingDelete(false)}
-                className="h-[48px] flex-1 rounded-2xl bg-surface-2 text-[15px] text-muted"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={remove}
-                className="h-[48px] flex-1 rounded-2xl bg-over text-[15px] font-medium text-ink"
-              >
-                Delete
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(true)}
-              className="h-[48px] w-full rounded-2xl bg-surface-2 text-[15px] text-over active:bg-surface-3"
-            >
-              Delete expense
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={remove}
+            className="h-[48px] w-full rounded-2xl bg-surface-2 text-[15px] text-over active:bg-surface-3"
+          >
+            Delete expense
+          </button>
         </div>
       </div>
     </Sheet>
