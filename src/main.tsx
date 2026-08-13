@@ -7,6 +7,20 @@ import { db } from './db/schema'
 import { startSync } from './sync/engine'
 import './index.css'
 
+// iOS 27 beta can reserve its Home Screen web-app bottom region twice: once
+// outside the web viewport and again through safe-area-inset-bottom. Detect
+// that exact standalone geometry so Safari and unaffected iOS versions keep
+// their normal safe-area behaviour.
+const standalone =
+  window.matchMedia('(display-mode: standalone)').matches ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true
+const iosMajor = Number(navigator.userAgent.match(/\bOS (\d+)[._]/)?.[1] ?? 0)
+const clippedViewport = window.screen.height - window.innerHeight >= 50
+
+if (standalone && iosMajor >= 27 && clippedViewport) {
+  document.documentElement.classList.add('ios-clipped-standalone')
+}
+
 // Dev-only console handle for inspecting and seeding the local database
 if (import.meta.env.DEV) {
   Object.assign(window, { db, mutations })
