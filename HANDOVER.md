@@ -1,7 +1,9 @@
 # Zero Budget — Proje Handover
 
-Son güncelleme: 13 Ağustos 2026  
-Aktif branch: `main`  
+Son güncelleme: 14 Ağustos 2026
+
+Aktif branch: `main`
+
 Bu doküman oluşturulmadan önceki son uygulama commit'i: `9cd2a5f`
 
 Bu dosya, projenin Claude Code ile başlayan ilk geliştirme aşamasından sonra
@@ -56,9 +58,16 @@ Claude Code oturumunun son kısmında Supabase projesi oluşturulmuş, ancak SQL
 - Her tabloda `auth.uid() = user_id` şartlı Row Level Security etkinleştirildi.
 - Politikalar yalnızca `authenticated` rolüne erişim veriyor.
 - Her tablo için `(user_id, updated_at)` sync index'i eklendi.
+- Üç tabloda primary key `(user_id, id)` bileşiği olarak düzenlendi; aynı sabit
+  built-in category ID'leri farklı kullanıcılar için çakışmadan var olabiliyordu.
+- Push `upsert` işlemi açıkça `onConflict: 'user_id,id'` kullanacak şekilde
+  düzeltildi.
 - `updated_at` değerini database saatinden üreten trigger'lar kuruldu.
 - Push sırası kategori → bütçe → harcama olacak şekilde düzenlendi.
 - Pull işlemi cursor ve sayfalama ile çalışıyor (`PAGE_SIZE = 1000`).
+- Eski tek global sync cursor yerine her tablo için ayrı cursor kullanılıyor;
+  böylece bir tablodaki ileri timestamp diğer tablonun satırlarını atlatmıyor.
+- Pull sıralaması `updated_at`, ardından `id` ile deterministik hale getirildi.
 - Push başarısız olursa outbox satırı silinmiyor; sonraki sync'te tekrar deneniyor.
 - GitHub Actions'a aşağıdaki repository secret'ları bağlandı:
   - `VITE_SUPABASE_URL`
@@ -397,3 +406,495 @@ davranış için her zaman `main` branch'indeki kod esas alınmalıdır.
 7. Her değişiklikten sonra typecheck, test, production build ve Pages deploy'u
    doğrulayın.
 
+## 11. Eksiksiz kronolojik oturum günlüğü
+
+Bu bölüm yalnızca son teknik durumu değil, bu sohbet boyunca hangi sorunların
+hangi sırayla konuşulduğunu, hangi varsayımların test edildiğini ve kararların
+nasıl değiştiğini aktarır. Bir sonraki geliştiricinin eski bir yaklaşımı yanlışlıkla
+geri getirmemesi için özellikle ayrıntılı tutulmuştur.
+
+### 11.1 İlk devir ve Claude Code bağlamı
+
+Kullanıcı projeye Claude Code ile başlamıştı ve uygulamanın çoğunluğu bitmişti.
+Bu sohbete gelme nedeni Claude Code session limitinin dolması ve özellikle
+Supabase/database bölümünün yarım kalmasıydı.
+
+Kullanıcı ilk olarak kod yazılmadan repo ve önceki mesajların incelenmesini,
+devam planının açıklanmasını, ardından gerekirse Supabase/GitHub giriş yetkisini
+kendisinin tarayıcıda vermesini istedi. Safari ve Chrome'da gerekli hesaplara
+giriş yaptı; production dashboard işlemleri bu açık oturum üzerinden yürütüldü.
+
+Kullanıcının aktardığı Claude Code son mesajlarında şu süreç vardı:
+
+1. Repo ve push yetkisi Claude Code tarafında vardı.
+2. İlk anda `.github/workflows/*.yml` push'u için GitHub token'ında `workflow`
+   scope sorunu olduğu düşünüldü ve kullanıcıya `gh auth refresh -h github.com
+   -s workflow` önerildi.
+3. Sonraki denemede push kendiliğinden geçti; workflow dosyası dahil beş commit
+   GitHub'a ulaştı.
+4. GitHub Pages kaynağı GitHub Actions olarak açıldı.
+5. İlk temiz CI build'i `@types/node` eksikliğiyle hata verdi.
+6. Lokal `tsconfig.node.tsbuildinfo` cache'i bu hatayı gizliyordu; temiz `npm ci`
+   koşulunda eksik dependency ortaya çıktı.
+7. `@types/node` eklenip temiz build/test doğrulandı ve Pages deploy başarılı oldu.
+8. İlk canlı adres `https://egowic.github.io/zero-budget/` olarak açıldı.
+9. Uygulama Safari → Share → Add to Home Screen akışıyla PWA olarak kurulabildi.
+10. Service worker sayesinde uygulamanın offline açılması hedeflendi.
+11. Canlı HTML ve manifest'in `/zero-budget/` base path altında doğru çözüldüğü
+    kontrol edildi.
+12. Supabase tarafında önceden bulunan “Portfolio” projesinin Zero ile
+    karıştırılmaması gerektiği tespit edildi.
+13. Dashboard ilk bakışta tek proje izlenimi verse de iki proje kartı bulundu.
+14. İlk tahmin edilen organization slug'ına doğrudan gidildiğinde “You do not
+    have access to this organization” hatası alındı; doğru dashboard linki/proje
+    kartı üzerinden devam edildi.
+15. Zero için ayrı Supabase projesi oluşturuldu.
+16. Proje adı `zero`, Türkiye'ye yakın olduğu için bölge Central EU (Frankfurt),
+    project ref
+    `epjlcfvccbzxrakhheqq` oldu.
+17. Güçlü database parolası kullanıldı ancak güvenlik nedeniyle repoya,
+    handover'a veya sohbet özetine yazılmadı.
+18. Create Project ekranındaki “Enable automatic RLS” seçeneğinin kapalı olması
+    sorun sayılmadı; `schema.sql` her tabloda RLS'yi açıkça etkinleştirecek şekilde
+    tasarlanmıştı.
+19. Supabase form alanlarında browser extension/parola yöneticisi klavye
+    simülasyonuyla çakıştığı için DOM tabanlı form doldurma kullanıldı.
+20. SQL editörüne karakter karakter yazmak Monaco'nun otomatik parantez
+    davranışı nedeniyle SQL'i bozuyordu; clipboard/paste yaklaşımına geçilmek
+    üzereyken Claude Code limiti bitti.
+
+Kullanıcı daha sonra hem Safari hem Chrome/Supabase oturumlarına giriş yaptı ve
+gerekirse GitHub yetkisi verebileceğini belirtti. GitHub erişiminde ek bir kullanıcı
+müdahalesine gerek kalmadı.
+
+### 11.2 Önceliğin database'den iPhone hizalamasına çevrilmesi
+
+Supabase çalışmasına devam edilmeden önce kullanıcı canlı PWA'daki görsel sorunu
+öne aldı. İlk ekran görüntüsünde Ana Ekran'dan açılan uygulama yukarı kaymış,
+Activity başlığı ve Settings ikonu iOS'un üst katmanı/gölgesi altında kalmıştı;
+Settings butonuna basmak zorlaşıyordu.
+
+Kullanıcının bu aşamadaki net ürün talimatları şunlardı:
+
+- Genel UI zaten beğeniliyordu ve değiştirilmemeliydi.
+- Yalnızca standalone PWA hizalama problemi çözülmeliydi.
+- Uygulama ekranın altına doğru oturmalıydı.
+- Safari browser görünümü ile Ana Ekran web-app görünümünün farkı dikkate
+  alınmalıydı.
+
+Bu kural sonraki tüm safe-area çalışmalarının sınırı oldu: yeni tasarım yapılmadı,
+yalnızca platform geometrisi düzeltildi.
+
+Kullanıcı birkaç kez database/login tarafında kendisi “okey” demeden ilerlenmemesini
+özellikle istedi. Bu nedenle recovery, login ve retention başlıkları ara ara
+konuşulsa da görsel hizalama önceliği korunup kapsam değişiklikleri açık onaydan
+sonra yapıldı.
+
+### 11.3 Yerel veri ile browser/PWA verisinin neden farklı göründüğü konuşması
+
+Kullanıcı aynı URL'yi Safari'de sıfırdan açtığında “No budget” görürken Ana
+Ekran'a eklenen uygulamada mevcut budget/expense verilerini görüyordu. Burada
+şu davranış açıklandı:
+
+- Uygulama local-first olduğu için ana veri kaynağı cihazdaki IndexedDB'dir.
+- Safari sekmesi ile Ana Ekran standalone PWA'sı iOS'ta farklı storage context'i
+  gibi davranabilir.
+- Aynı URL'yi açmak, henüz ortak bir cloud identity ve tamamlanmış sync yoksa
+  aynı IndexedDB verisini otomatik paylaşmak anlamına gelmez.
+- Bu nedenle bir context'teki yerel veri diğerinde başlangıçta görünmeyebilir.
+- Aynı e-posta hesabıyla login olup sync tamamlandıktan sonra iki context cloud
+  üzerinden aynı verilere ulaşabilir.
+
+Kullanıcı bunun Ana Ekran ikonunu yanlışlıkla kaldırırsa veri kaybı yaratabileceği
+endişesini dile getirdi. Konuşulan çözüm katmanları:
+
+1. Supabase cloud copy
+2. Aynı hesaba yeniden login olabilme
+3. Settings içindeki bağımsız JSON export/restore
+
+İlk recovery-email yaklaşımı bu endişeyi azaltıyordu; daha sonra zorunlu ama
+kalıcı e-posta login mimarisiyle konu daha net çözüldü.
+
+### 11.4 Ana Ekran uygulamasının güncelleme davranışı
+
+Kullanıcı her güncellemede uygulamayı Ana Ekran'dan silip yeniden eklemek gerekip
+gerekmediğini sordu. Verilen ve test edilen cevap:
+
+- Hayır, mevcut Ana Ekran PWA'sı aynı GitHub Pages adresini ve service worker'ı
+  kullanır.
+- Yeni deploy mevcut PWA'ya ulaşır.
+- iOS cache/service-worker yaşam döngüsü nedeniyle uygulamayı tamamen kapatıp
+  yeniden açmak gerekebilir.
+- Bazen ikinci açılış yeni asset'leri gösterir.
+- Yeniden “Add to Home Screen” yapmak normal güncelleme akışının parçası değildir.
+
+Bu teori expense Delete değişikliğiyle pratikte test edildi: Kullanıcı Ana Ekran'a
+önceden eklenmiş sürümde yeni tek-adımlı Delete davranışını gördü. Böylece eski
+ikonun uygulama kodu güncellemelerini aldığı, kalıcı farkın yalnızca standalone
+geometrisi olduğu doğrulandı.
+
+### 11.5 iOS sürümü ve karşılaştırmalı ekran görüntüleri
+
+Kullanıcı iOS 27 beta kullandığını belirtti. Safari browser ve standalone web-app
+görüntüleri karşılaştırıldı:
+
+- Safari'de header konumu daha normaldi.
+- Standalone'da Dynamic Island/status-bar altındaki native scroll-edge gölgesi
+  ilk kontrolleri etkiliyordu.
+- Alt tab bar standalone modda gereğinden fazla yukarıda kalabiliyor ve altında
+  boş alan oluşuyordu.
+- Browser görünümünde Safari'nin kendi alt barı vardı; standalone görünümde bu
+  alanın hesaplanışı farklıydı.
+
+Bu nedenle çözüm global padding değişikliği olarak değil, standalone/iOS
+geometrisine özel class'larla uygulandı.
+
+### 11.6 Safe-area ve üst gölge iterasyonlarının tamamı
+
+Hizalama tek denemede çözülmedi. Aşağıdaki deneyler ve sonuçları sırasıyla
+uygulandı:
+
+1. `safe-area-inset-top` ve `safe-area-inset-bottom` değerlerine `0px` fallback
+   eklendi.
+2. Tailwind'in `pt-3`, `pb-2`, `pb-4` utility'lerinin safe-area property'lerini
+   ezmemesi için birleşik `calc(...)` kuralları yazıldı.
+3. `apple-mobile-web-app-status-bar-style` önce `black-translucent` değerinden
+   `black` değerine çevrilerek viewport davranışı test edildi.
+4. iOS 27'nin alt alanı hem viewport dışında hem safe-area ile ayırdığı gözlemi
+   üzerine `ios-clipped-standalone` tespiti eklendi.
+5. Tespit için standalone mode, user-agent'tan iOS major version ve
+   `screen.height - innerHeight >= 50` geometrisi kullanıldı.
+6. `ios-clipped-standalone` altında bottom safe-area tekrarını kaldıran kurallar
+   yazıldı.
+7. Tab bar'a `app-tabbar` class'ı eklenip onun alt padding'i ayrıca düzeltildi.
+8. Status-bar style tekrar `black-translucent` yapılıp sonuç karşılaştırıldı.
+9. Daha sonra yeniden `black` kullanıldı; güncel değer `black` olarak kaldı.
+10. iOS native scroll-edge efektini bastırmak için ekranın üstüne 1 px sabit,
+    aynı renk bir `body::before` kenarı ekleme deneyi yapıldı.
+11. Bu hile yeterli olmadığı için kaldırıldı.
+12. Activity ve Budgets header'larına `app-header` class'ı eklendi.
+13. Header'ı native gölgenin altına fiziksel olarak taşımak için standalone-only
+    padding yaklaşımına geçildi.
+14. İlk yaklaşım yalnızca `ios-clipped-standalone` class'ına bağlıydı; beta iOS
+    user-agent/geometri tespitinin değişken davranabildiği görüldü.
+15. Gerçek standalone sinyaline bağlı `standalone-web-app` class'ı ayrıca eklendi.
+16. Çözüm branch'inin gerçekten çalıştığını kanıtlamak için kasıtlı olarak çok
+    büyük `7rem` üst boşluk verildi.
+17. Kullanıcının ekran görüntüsü header'ın çok aşağı taşındığını doğruladı; bu,
+    doğru CSS dalına ulaşıldığının kanıtı oldu.
+18. `7rem` değeri önce `4rem` değerine indirildi.
+19. Sonra `2.5rem` değerine indirildi.
+20. Sonra `1.75rem` değerine indirildi.
+21. Bir ara hizalama iyi görünse de logout/login ve yeni render sonrasında boşluk
+    yeniden farklı algılandı; değerler ekran görüntüleriyle tekrar ayarlandı.
+22. `1.75rem → 1.625rem`: header biraz yukarı çekildi.
+23. `1.625rem → 1.375rem`: daha görünür şekilde yukarı çekildi.
+24. Günlük-limit geliştirmesiyle aynı commit'te `1.375rem → 1.4375rem`: tam
+    1 CSS px aşağı alındı.
+25. `1.4375rem → 1.5rem`: bir CSS px daha aşağı alındı.
+26. Kullanıcı, gönderilen 945 × 2048 görselin web tarafında yaklaşık 393 × 852
+    CSS px viewport'a karşılık geldiğini sordu/öğrendi. Bir CSS px'in ekran
+    görüntüsünde yaklaşık 2.4 raster px göründüğü açıklandı.
+27. Kullanıcının talebiyle `1.5rem → 1.6875rem`: tam 3 CSS px aşağı alındı.
+28. Son talep üzerine `1.6875rem → 1.75rem`: son 1 CSS px aşağı alındı.
+
+Güncel ve kullanıcı tarafından “bu şekilde kapatılacak” olarak hedeflenen değer
+yeniden `1.75rem` oldu. Bu sayının daha önce de denenmiş olması çelişki değildir;
+arada standalone class tespiti ve diğer safe-area kuralları değişmiştir. Yalnızca
+sayısal değeri eski commit'lerle karşılaştırmak yeterli değildir.
+
+### 11.7 Database retention fikrinin ilk konuşulması
+
+Kullanıcı Supabase ücretsiz planının dolabileceğini, tabloların sürekli
+büyüyeceğini ve eski aylara çok sık bakmadığını belirtti. Bu aşamada özellikle
+kod yazılmaması, yalnızca fikir verilmesi istendi.
+
+Konuşulan seçenekler:
+
+- Eski expense kayıtlarını belirli aralıklarla silmek
+- Yalnızca son birkaç ayı ayrıntılı tutmak
+- Eski ayların önemli bilgilerini/özetlerini korumak
+- Supabase'in dolarken otomatik oldest-first cleanup yapıp yapamayacağı
+- Zamanlanmış cleanup/retention job kullanmak
+
+İlk karar uygulama yapmamak oldu. Gerekçeler:
+
+- Tek kullanıcı verisi 500 MB'a çok yavaş yaklaşır.
+- Ham finansal veriyi erken silmek geri dönüşsüzdür.
+- Tombstone kullanan sync tasarımında server'dan hard-delete edilen satır eski
+  cihazdan yeniden doğabilir.
+- Önce backup ve güvenli retention protokolü tasarlanmalıdır.
+
+### 11.8 Recovery yaklaşımından kalıcı login yaklaşımına geçiş
+
+Supabase'in ilk tamamlandığı aşamada anonim auth hâlâ vardı; ancak yalnızca canlı
+URL'yi ziyaret etmek anonim kullanıcı oluşturmuyordu. Önce mevcut session aranıyor,
+yalnızca gerçek bir local mutation outbox'a girdiyse `ensureSession()` ile anonim
+identity oluşturuluyordu. Bu, linki meraktan açan kişilerin gereksiz auth user
+üretmesini önlüyordu.
+
+İlk etapta Settings içinden mevcut anonim hesabı e-posta/parola ile recovery
+edilebilir hale getiren bir akış geliştirildi. Kullanıcı recovery özelliğini
+denediğini ve çalıştığını söyledi; her açılışta login istemediğini gözlemledi.
+
+Daha sonra kullanıcı şu ürün kararını önerdi:
+
+- Zaten bir hesap altyapısı varsa net bir login ekranı olsun.
+- Her açılışta login istemesin; session kalıcı olsun.
+- Yerel veri korunurken aynı e-posta hesabıyla sync devam etsin.
+- Recovery mi, login mi belirsizliği ortadan kalksın.
+- Login/sync durumunu gösteren minimal yeşil bir nokta olsun.
+- Settings'teki mevcut yeşil sync sunumu bozulmasın.
+- Activity ve Budgets ekranlarında da küçük status göstergesi olsun.
+
+Önce yaklaşım konuşuldu, kullanıcı “okey” dedikten sonra implementasyona geçildi.
+
+Son mimari:
+
+- Anonymous identity oluşturma kaldırıldı.
+- Session yoksa `Login` ekranı gösteriliyor.
+- Email/password ile `signInWithPassword` kullanılıyor.
+- Session persist ve token refresh açık.
+- Login'den sonra local-first sync başlıyor.
+- Ana ekranlarda `SyncDot`, Settings'te ayrıntılı status bulunuyor.
+- Yeşil nokta “signed in + idle/backed up” durumunu, diğer renkler syncing,
+  offline veya error durumlarını temsil ediyor.
+
+### 11.9 Logout ve Sync now iyileştirmeleri
+
+Kullanıcı Settings'te logout seçeneği istedi. Logout eklendikten sonra ilk hali
+tek dokunuşla çıkış yapıyordu. Kullanıcı yanlışlıkla çıkışı önlemek için onay
+istedi ve ayrıca `Sync now` yazısının çok silik olduğunu belirtti.
+
+Uygulanan sonuç:
+
+- İlk `Log out` dokunuşu inline “Are you sure?” alanını açar.
+- `Cancel` ve kesin `Log out` seçenekleri gösterilir.
+- İşlem sırasında “Logging out…” görünür.
+- Sync devam ederken veya pending varken logout engellenir.
+- Logout yalnızca bu cihazdaki session'ı kapatır; diğer cihazları kapatmaz.
+- `Sync now` boyutu korunup kontrastı artırıldı.
+
+Kullanıcının bir mesajındaki “logo ad” ifadesi bağlam içinde “log out” talebi
+olarak yorumlandı ve hesap kartına logout seçeneği eklendi; yeni bir logo/branding
+özelliği yapılmadı.
+
+### 11.10 Expense Delete davranışı
+
+Başlangıçta expense detayında Delete'e basınca ikinci bir “emin misin?” adımı
+vardı. Kullanıcı bunun gereksiz olduğunu ve ilk Delete dokunuşunda silinmesini
+istedi.
+
+- İkinci confirmation state/UI kaldırıldı.
+- Delete tek dokunuşta `deleteExpense` çağırıyor.
+- Gerçek veri hard-delete edilmez; local row `deleted = 1` tombstone olur ve
+  outbox üzerinden Supabase'e sync edilir.
+- Bu değişikliğin mevcut Ana Ekran PWA'sına ulaşması, service-worker update
+  davranışını doğrulamak için de kullanıldı.
+
+### 11.11 “Not started” bütçede günlük limit
+
+Kullanıcı henüz başlamamış bir budget kartında `Not started` görünürken günlük
+harcama tutarının gizlenmemesini istedi.
+
+Önceden Budgets listesindeki günlük-limit alt satırı yalnızca `phase ===
+'active'` iken render ediliyordu. Bu koşul `phase !== 'ended'` olarak değiştirildi.
+
+Sonuç:
+
+- Upcoming budget için `amount / toplam gün` mantığındaki allowance gösterilir.
+- “Not started” etiketi korunur.
+- Bitiş tarihi geçmiş budget'ta bu satır gösterilmez.
+- Örnek testte ₺19.000 / 31 gün için upcoming allowance'ın minor unit değeri
+  `61_200` (₺612) olarak doğrulandı.
+
+### 11.12 Tek hesap güvenliği konuşması ve Supabase denetimi
+
+Kullanıcı linki bulan başka birinin hesap açamamasını, hiçbir veriyi görmemesini
+ve yalnızca kendi tek hesabının kalmasını istedi.
+
+Kod veya varsayım üzerinden cevap vermek yerine Supabase dashboard ve SQL ile
+doğrudan production denetimi yapıldı:
+
+- Auth user toplamı sorgulandı.
+- E-posta kullanıcısı ve anonim kullanıcı ayrı sayıldı.
+- `budgets`, `expenses`, `categories` satır sayıları sorgulandı.
+- `pg_policies` üzerinden üç tablonun RLS policy'leri okundu.
+- Her policy'nin `authenticated` rolü ve `auth.uid() = user_id` koşulu kullandığı
+  doğrulandı.
+- Dashboard → Authentication → Sign In / Providers ekranında yeni signup ve
+  anonymous sign-in switch'leri kapatıldı.
+- Email provider açık bırakıldı.
+
+Bu ayar sonrası yeni ziyaretçi signup yapamaz. Public anon/publishable key'in
+frontend bundle'da bulunması normaldir; veri güvenliğini gizli frontend key değil,
+RLS sağlar. `service_role` key hiçbir zaman frontend'e konmamalıdır.
+
+### 11.13 Dummy cloud verisinin silinmesi
+
+Kullanıcı o ana kadar girilmiş verilerin tamamının dummy olduğunu açıkça onayladı
+ve tabloları uçurmadan yalnızca içlerini temizlemeyi istedi.
+
+Silmeden önce tespit edilen production durumu:
+
+- 2 auth user: 1 e-posta, 1 anonim
+- 1 budget
+- 19 expense
+- 0 category
+
+Onay sonrası tek transaction içinde:
+
+1. `public.expenses` satırları silindi.
+2. `public.budgets` satırları silindi.
+3. `public.categories` satırları silindi.
+4. `auth.users` içindeki yalnızca `is_anonymous = true` kullanıcı silindi.
+5. Transaction commit edildi.
+
+Supabase SQL Editor destructive-query uyarısı gösterdi; kullanıcının açık onayı
+zaten bulunduğu için “Run query” ile devam edildi.
+
+Son doğrulama query'si 6 satır döndürdü:
+
+- anonymous user `0`
+- total auth user `1`
+- email auth user `1`
+- budgets `0`
+- categories `0`
+- expenses `0`
+
+Bu işlem schema, tables, indexes, functions, triggers veya RLS policies üzerinde
+destructive değişiklik yapmadı.
+
+### 11.14 Supabase Nano limitleri, sync hataları ve uzun yıllar kullanım konuşması
+
+Kullanıcı daha sonra konuya tekrar dönerek üç ana endişeyi sordu:
+
+1. Nano compute ve Free plan bottleneck/limitleri
+2. Database'in yıllar içinde şişmesi ve otomatik oldest-first silme
+3. Sync hatası veya Supabase limiti nedeniyle uzun vadeli data loss
+
+Bu aşamada kod yazılmadı. Güncel resmi Supabase belgeleri araştırıldı ve mevcut
+sync engine kodu satır satır incelendi.
+
+Konuşmada aktarılan Free plan bağlamı:
+
+- Nano shared CPU
+- Yaklaşık 0.5 GB RAM
+- Proje başına 500 MB database limiti
+- 5 GB aylık egress
+- 50.000 MAU; tek kullanıcı için ilgisiz derecede yüksek
+- Düşük aktivitede yaklaşık 7 gün sonra free project pause ihtimali
+- 500 MB aşımında read-only davranışı/fair-use restriction ihtimali
+- Free planda otomatik indirilebilir günlük backup olmaması
+- Pro planın o tarihte yaklaşık $25/ay ve 7 günlük daily backup sunması
+- PITR'nin ayrı ve çok daha pahalı bir add-on olması
+
+Varılan sonuç:
+
+- Tek kullanıcının küçük budget/expense satırları için Nano compute bottleneck
+  değildir.
+- Günde 10 expense ile 10 yılda yaklaşık 36.500 expense oluşur; bunun 500 MB'a
+  yaklaşması beklenmez.
+- Bu proje için yakın risk kapasite değil, bağımsız otomatik backup eksikliğidir.
+- Supabase dolunca kendi kendine en eski satırı silmez.
+- `pg_cron` ile scheduled delete teknik olarak mümkündür ama uygulanmadı.
+- Database gerçekten büyürse önce eski ayların özetlenmesi, export alınması ve
+  yalnız güvenli tombstone'ların temizlenmesi düşünülmelidir.
+
+Sync kodundan doğrulanan hata davranışı:
+
+- Her veri önce telefona yazılır.
+- Veri ve outbox aynı transaction'dadır.
+- Network/Supabase hatasında outbox korunur.
+- Offline, app focus, online dönüşü, mutation, 5 dakikalık timer ve `Sync now`
+  yeniden deneme sağlar.
+- Supabase read-only olursa upsert hata verir; local row ve outbox kaybolmaz.
+- UI kırmızı/farklı renk status ve “Retrying/waiting” gösterir.
+- Gerçek hata metni kullanıcıya yeterince görünür değildir.
+- Cloud'a ulaşmamış pending veri varken cihaz/app storage tamamen silinirse o
+  pending veri kurtarılamaz.
+- İki cihaz aynı satırı değiştirirse conflict UI yoktur; last-write-wins işler.
+
+Uzun vadeli öneri olarak kapasite upgrade'i yerine şu sıra önerildi:
+
+1. Nano'da kalmak
+2. Otomatik eski-veri silmeyi şimdilik yapmamak
+3. Database boyutunu dönemsel izlemek
+4. Uzun sync hatasını daha görünür yapmak
+5. Supabase dışına düzenli, mümkünse şifreli backup almak
+6. Manuel JSON export'u iCloud Drive gibi bağımsız bir yerde tutmak
+7. Pro'ya kapasite için değil, pause olmaması ve otomatik backup değerliyse geçmek
+
+Kullanıcı bu değerlendirmeyi mantıklı buldu ve database tarafında acil geliştirme
+olmadığını, mevcut kullanım modeliyle yıllarca devam edebileceğini kabul etti.
+
+### 11.15 Her iterasyondaki doğrulama ve deployment davranışı
+
+Uygulama kodu değişen her iterasyonda genel olarak şu kontroller çalıştırıldı:
+
+```bash
+git diff --check
+npm run typecheck
+npm test
+BASE_PATH=/zero-budget/ npm run build
+```
+
+Ardından değişiklik `main` branch'ine commit/push edildi ve GitHub Actions Pages
+run'ı tamamlanana kadar izlendi. Canlı HTML'den güncel hashed CSS asset'i bulunup
+beklenen safe-area değerinin gerçekten yayınlandığı ayrıca kontrol edildi.
+
+CI run'larında uygulama test/build/deploy işlemleri başarılıydı. GitHub Actions
+annotation olarak `actions/checkout@v4`, `actions/setup-node@v4` ve bazı artifact
+action'larının eski Node 20 runtime hedefi nedeniyle Node 24'e zorlandığı uyarısını
+gösterdi. Bu bir deployment hatası değildir; ileride action major sürümleri
+güncellenince temizlenebilir.
+
+## 12. Konuşulan fakat bilinçli olarak uygulanmayan işler
+
+Aşağıdaki fikirler unutulmuş değildir; konuşulup ertelenmiştir:
+
+1. **Otomatik eski expense silme:** Yakın kapasite ihtiyacı olmadığı ve sync
+   resurrection/tombstone riski bulunduğu için yapılmadı.
+2. **Aylık özet + ham veri retention:** Gelecekte database gerçekten büyürse
+   değerlendirilecek bir tasarım fikri olarak kaldı.
+3. **Supabase Cron cleanup:** Teknik olarak mümkün olduğu doğrulandı fakat job
+   oluşturulmadı.
+4. **Pro/PITR upgrade:** Şu an gerekli görülmedi. Pro ancak backup/pause garantisi
+   için değerli olabilir; PITR bu kişisel proje için pahalı bulundu.
+5. **Otomatik harici backup workflow'u:** En değerli sonraki güvenlik işi olarak
+   tanımlandı fakat kullanıcı bu oturumda implementasyon istemedi.
+6. **Güçlü sync-error banner/notification:** Eksik olduğu tespit edildi fakat
+   henüz yapılmadı.
+7. **Conflict resolution UI:** Tek kullanıcı/az cihaz varsayımı nedeniyle
+   last-write-wins korunuyor.
+8. **Ana UI redesign:** Kullanıcı açıkça UI'ye dokunulmamasını istedi; yapılmadı.
+9. **Her update'te PWA'yı yeniden kurma:** Gerekli olmadığı testle doğrulandı;
+   böyle bir akış eklenmedi.
+10. **Public signup:** Bilinçli olarak kapalı tutuldu; uygulamanın çok-kullanıcılı
+    ürüne dönüştürülmesi istenmiyor.
+
+## 13. Ürün kararları ve korunması gereken davranışlar
+
+Bir sonraki geliştirici aşağıdaki maddeleri geçici implementasyon detayı değil,
+bu sohbet boyunca verilmiş ürün kararları olarak görmelidir:
+
+- Uygulama tek kullanıcı içindir.
+- Yeni kullanıcı signup kapalı kalmalıdır.
+- Anonymous sign-in kapalı kalmalıdır.
+- E-posta session'ı uygulama açılışları arasında kalıcı olmalıdır.
+- Veri önce local'e yazılmalı; ağ ana UI'yi bloklamamalıdır.
+- Supabase sync/backup kopyasıdır; tek veri güvenliği katmanı değildir.
+- UI'nin genel görünümü kullanıcı tarafından beğenilmektedir ve korunmalıdır.
+- Activity/Budgets header'ı standalone iOS native gölgesinin hemen altında,
+  gereksiz büyük boşluk bırakmadan durmalıdır.
+- Safari browser görünümü standalone düzeltmelerden etkilenmemelidir.
+- Expense Delete tek dokunuşta çalışmalıdır.
+- Logout mutlaka onay istemelidir.
+- `Sync now` okunabilir olmalıdır.
+- Login/sync durumu minimal yeşil/status noktasıyla görünmelidir.
+- Upcoming/Not started budget günlük limiti göstermelidir.
+- Existing Home Screen PWA deploy'lardan otomatik güncellenebilmelidir.
+- Database dolmadan otomatik veri silme yapılmamalıdır.
+- Tablolar/RLS yanlışlıkla drop edilmemelidir.
+- Cloud hard-delete işlemi yapılırken yerel IndexedDB'nin ayrı kaldığı unutulmamalıdır.
+- Uzun yıllar kullanım için en değerli gelecek yatırım bağımsız backup'tır.
