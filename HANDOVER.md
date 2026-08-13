@@ -388,6 +388,7 @@ c68c8c5 Raise iOS PWA header slightly
 5b50ab4 Nudge iOS PWA header below shadow
 c607083 Lower iOS PWA header by three pixels
 9cd2a5f Finalize iOS PWA shadow clearance
+e50f16f Update expense category selection immediately
 ```
 
 `a7920cd` içindeki recovery yaklaşımı daha sonra `f7841b8` ile kalıcı login
@@ -848,6 +849,50 @@ annotation olarak `actions/checkout@v4`, `actions/setup-node@v4` ve bazı artifa
 action'larının eski Node 20 runtime hedefi nedeniyle Node 24'e zorlandığı uyarısını
 gösterdi. Bu bir deployment hatası değildir; ileride action major sürümleri
 güncellenince temizlenebilir.
+
+### 11.16 Login süresi ve expense kategori seçimindeki son düzeltme
+
+Handover'ın ilk sürümünden sonra kullanıcı iki ek konu sordu.
+
+İlk konu, Ana Ekran PWA'sının ne zaman tekrar login isteyeceğiydi. Açıklanan
+davranış:
+
+- Supabase access token kısa ömürlü olsa da refresh token otomatik yenilenir.
+- Session `zero.auth` storage key'iyle cihazda kalıcıdır.
+- Normal günlük kullanımda her açılışta veya belirli kısa bir aralıkta login
+  beklenmez; haftalar/aylar boyunca açık kalabilir.
+- Kesin bir “şu tarihte yeniden login” süresi verilmez.
+- Kullanıcı logout yaparsa, iOS/site storage'ı temizlenirse, Ana Ekran web-app
+  storage'ı silinirse, Supabase refresh token/session'ı güvenlik nedeniyle iptal
+  edilirse veya auth ayarlarında session'ları geçersizleştiren değişiklik yapılırsa
+  yeniden login gerekir.
+
+İkinci konu, var olan bir expense'in kategorisini değiştirme ekranındaki görsel
+gecikmeydi. Örneğin Dining Out seçiliyken Takeaway'e dokunulduğunda database ve
+timeline doğru güncelleniyor, fakat detay grid'indeki Takeaway logosu hemen seçili
+görünmüyor veya ancak daha sonra/reopen sonrasında yanıyordu.
+
+Kök neden:
+
+- Timeline satırına dokunulduğunda `ExpenseDetailSheet` bileşenine expense'in o
+  andaki object snapshot'ı veriliyordu.
+- `updateExpense` IndexedDB'yi doğru güncelliyordu.
+- Timeline'ın live query'si yenilense bile açık sheet'in `selected` state'inde
+  tutulan object eski `categoryId` değerini taşımaya devam ediyordu.
+- `CategoryGrid.selectedId` bu eski snapshot'tan beslendiği için seçili ikon
+  görsel olarak gecikiyordu.
+
+`e50f16f Update expense category selection immediately` commit'iyle:
+
+- Sheet içinde ayrı `selectedCategoryId` UI state'i eklendi.
+- Yeni kategoriye dokunur dokunmaz bu state optimistik olarak değiştiriliyor.
+- `CategoryGrid` seçili ikonunu bu anlık state'ten okuyor.
+- Aynı anda `updateExpense` ile IndexedDB/outbox kaydı devam ediyor.
+- Nadir bir local write hatasında seçim önceki kategoriye geri dönüyor.
+- Başka veya yenilenmiş expense açıldığında state prop'taki güncel kategoriye
+  reset ediliyor.
+- Başka UI veya category davranışı değiştirilmedi.
+- Typecheck, 11 unit test ve production build başarılı tamamlandı.
 
 ## 12. Konuşulan fakat bilinçli olarak uygulanmayan işler
 
