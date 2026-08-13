@@ -125,13 +125,12 @@
   .ios-clipped-standalone .app-tabbar .safe-bottom.pb-2 {
     padding-bottom: 0;
   }
-  /* Diagnostic workaround for the native iOS scroll-edge layer. WebKit can
-     report a zero top safe-area in an installed web app, so do not key this to
-     an iOS version or viewport measurement. This intentionally large offset
-     proves the standalone branch is active and places controls well below the
-     system-owned blur; it will be tightened after the on-device check. */
+  /* WebKit can report a zero top safe-area in an installed web app while iOS
+     still draws its native scroll-edge blur over the page. Key this to the
+     actual standalone display mode and keep the header controls below that
+     system-owned layer. */
   .standalone-web-app .app-header.safe-top.pt-3 {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 7rem);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 4rem);
   }
 
   .hide-scrollbar::-webkit-scrollbar {
