@@ -46,7 +46,11 @@ function SignedInApp({ accountEmail }: { accountEmail: string | null }) {
           onOpenSettings={() => setSettingsOpen(true)}
         />
       ) : (
-        <Budgets createOpen={budgetSheetOpen} onCreateOpenChange={setBudgetSheetOpen} />
+        <Budgets
+          createOpen={budgetSheetOpen}
+          onCreateOpenChange={setBudgetSheetOpen}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
       )}
 
       <TabBar tab={tab} onTabChange={setTab} onAdd={() => setAddOpen(true)} />

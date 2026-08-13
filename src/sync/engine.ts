@@ -16,12 +16,31 @@ import { db, getMeta, setMeta, type Budget, type Category, type Expense } from '
 
 export type SyncState = 'disabled' | 'idle' | 'syncing' | 'offline' | 'error'
 
+/**
+ * Why a sync failed, in terms of what it means for the person using the app.
+ *
+ * The distinction that matters is whether waiting will fix it. A dropped
+ * network heals itself and is not worth interrupting anyone over; a revoked
+ * session or a paused project never heals, and every quiet minute is another
+ * minute of spending that exists only on this phone.
+ */
+export type SyncErrorKind = 'auth' | 'unavailable' | 'network' | 'unknown'
+
 export interface SyncStatus {
   state: SyncState
   /** Local changes not yet accepted by the server. */
   pending: number
   lastSyncedAt: number | null
+  /** Set while `state` is 'error'. */
+  errorKind?: SyncErrorKind
+  /** The underlying error text, kept so the user can be told what broke. */
   message?: string
+  /**
+   * When the current run of failures began, persisted across relaunches.
+   * Without that, closing the app would reset the clock and a three-day
+   * outage would look brand new every single morning.
+   */
+  failingSince: number | null
 }
 
 type Table = 'budgets' | 'expenses' | 'categories'
@@ -29,6 +48,7 @@ const TABLES: Table[] = ['categories', 'budgets', 'expenses']
 
 const CURSOR_KEY_PREFIX = 'syncCursor:'
 const LAST_SYNCED_KEY = 'lastSyncedAt'
+const FAILING_SINCE_KEY = 'syncFailingSince'
 const PAGE_SIZE = 1000
 
 // ── Status broadcasting ─────────────────────────────────────────────────────
@@ -37,6 +57,7 @@ let status: SyncStatus = {
   state: supabase ? 'idle' : 'disabled',
   pending: 0,
   lastSyncedAt: null,
+  failingSince: null,
 }
 const listeners = new Set<() => void>()
 
@@ -56,6 +77,66 @@ export function getSyncStatus(): SyncStatus {
 
 async function refreshPending() {
   setStatus({ pending: await db.outbox.count() })
+}
+
+// ── Failure classification ──────────────────────────────────────────────────
+
+/**
+ * Maps a thrown error onto the four kinds the UI reacts to.
+ *
+ * Supabase surfaces PostgREST errors as objects with `code`/`status` and
+ * network failures as plain `TypeError`s from fetch, so both shapes are
+ * inspected rather than matching on message text alone.
+ */
+export function classifyError(error: unknown): SyncErrorKind {
+  // Only when the browser positively reports being offline. `!navigator.onLine`
+  // would also swallow a genuine auth or quota failure whenever the property is
+  // merely absent, and misreporting those as a passing blip is the one mistake
+  // that keeps a permanent problem quiet.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'network'
+
+  const raw = error as { status?: number; code?: string; message?: string } | null
+  const httpStatus = typeof raw?.status === 'number' ? raw.status : undefined
+  const code = typeof raw?.code === 'string' ? raw.code : ''
+  const text = `${raw?.message ?? ''} ${code}`.toLowerCase()
+
+  // A refused or expired session: the only fix is signing in again
+  if (httpStatus === 401 || httpStatus === 403) return 'auth'
+  if (/jwt|token|not authenticated|invalid.*credential|refresh/.test(text)) return 'auth'
+
+  // Project paused, over quota, or read-only — waiting will not help
+  if (httpStatus === 503 || httpStatus === 507 || httpStatus === 429) return 'unavailable'
+  if (httpStatus !== undefined && httpStatus >= 500) return 'unavailable'
+  // Postgres: read-only transaction / disk full / too many connections
+  if (/^(25006|53100|53300|57p03)$/.test(code)) return 'unavailable'
+  if (/read-only|paused|quota|disk full|exceeded/.test(text)) return 'unavailable'
+
+  // fetch() rejects with a TypeError when it cannot reach the host at all
+  if (error instanceof TypeError) return 'network'
+  if (/failed to fetch|network|timeout|abort/.test(text)) return 'network'
+
+  return 'unknown'
+}
+
+/** Starts or extends the current failure run, keeping the original start time. */
+async function markFailure(kind: SyncErrorKind, message: string) {
+  let since = status.failingSince
+  if (since === null) {
+    since = await getMeta<number | null>(FAILING_SINCE_KEY, null)
+  }
+  if (since === null) {
+    since = Date.now()
+    await setMeta(FAILING_SINCE_KEY, since)
+  }
+  setStatus({ state: 'error', errorKind: kind, message, failingSince: since })
+}
+
+/** Clears the failure run after anything that proves the backend is reachable. */
+async function markHealthy(patch: Partial<SyncStatus> = {}) {
+  if (status.failingSince !== null || (await getMeta<number | null>(FAILING_SINCE_KEY, null))) {
+    await setMeta(FAILING_SINCE_KEY, null)
+  }
+  setStatus({ errorKind: undefined, message: undefined, failingSince: null, ...patch })
 }
 
 // ── Row mapping ─────────────────────────────────────────────────────────────
@@ -235,10 +316,14 @@ export async function sync(): Promise<void> {
   }
 
   running = true
-  setStatus({ state: 'syncing', message: undefined })
+  // The previous error is deliberately left in place while the retry runs, so
+  // a repeatedly failing sync does not blink its own explanation away.
+  setStatus({ state: 'syncing' })
 
   try {
     if (!navigator.onLine) {
+      // Not a backend failure, so it does not start a failure run. Exposure is
+      // still measurable from lastSyncedAt and the pending count.
       setStatus({ state: 'offline' })
       return
     }
@@ -248,7 +333,9 @@ export async function sync(): Promise<void> {
     // anonymous cloud identity behind the login screen.
     const userId = await currentUserId()
     if (!userId) {
-      setStatus({ state: 'idle' })
+      // Reporting 'idle' here used to render a green dot and a reassuring
+      // "Backed up 3h ago" while nothing had been sent at all.
+      await markFailure('auth', 'Signed out — sign in again to resume backup.')
       return
     }
 
@@ -257,12 +344,12 @@ export async function sync(): Promise<void> {
 
     const now = Date.now()
     await setMeta(LAST_SYNCED_KEY, now)
-    setStatus({ state: 'idle', lastSyncedAt: now })
+    await markHealthy({ state: 'idle', lastSyncedAt: now })
   } catch (error) {
-    setStatus({
-      state: 'error',
-      message: error instanceof Error ? error.message : 'Sync failed',
-    })
+    const kind = classifyError(error)
+    const message =
+      error instanceof Error && error.message ? error.message : 'Sync failed'
+    await markFailure(kind, message)
   } finally {
     running = false
     await refreshPending()
@@ -285,7 +372,12 @@ export function startSync(): void {
   started = true
 
   void (async () => {
-    setStatus({ lastSyncedAt: await getMeta<number | null>(LAST_SYNCED_KEY, null) })
+    // Restore both clocks before the first attempt, so an outage that started
+    // days ago is already known to be days old rather than seconds old.
+    setStatus({
+      lastSyncedAt: await getMeta<number | null>(LAST_SYNCED_KEY, null),
+      failingSince: await getMeta<number | null>(FAILING_SINCE_KEY, null),
+    })
     await refreshPending()
     void sync()
   })()

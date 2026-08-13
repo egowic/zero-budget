@@ -90,6 +90,36 @@ export function SettingsSheet({
               ? 'Everything is saved on this phone first, then copied to your private cloud store in the background.'
               : 'Cloud backup is not set up for this build. Your data lives only on this device — export a backup regularly.'}
           </p>
+
+          {/* The engine has always known exactly what broke; until now it had
+              nowhere to say it. This is that place. */}
+          {status.state === 'error' && status.message && (
+            <div className="mt-3 border-t border-hairline pt-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-[11px] tracking-[0.08em] text-faint uppercase">
+                  Last error
+                </span>
+                {status.failingSince && (
+                  <span className="text-[11px] text-faint">
+                    since {new Date(status.failingSince).toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <p
+                className="mt-1.5 font-mono text-[11.5px] leading-relaxed break-words"
+                style={{ color: 'var(--color-over)' }}
+              >
+                {status.message}
+              </p>
+              {status.pending > 0 && (
+                <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+                  {status.pending} {status.pending === 1 ? 'change is' : 'changes are'}{' '}
+                  still only on this phone. Exporting a backup below keeps a copy
+                  that does not depend on the cloud.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {accountEmail && (

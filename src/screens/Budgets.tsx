@@ -1,6 +1,7 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ProgressBar } from '../components/ProgressBar'
 import { SyncDot } from '../components/SyncDot'
+import { SyncAlertBar } from '../components/SyncAlertBar'
 import { BudgetSheet } from './BudgetSheet'
 import { useOrderedBudgetStatuses } from '../db/queries'
 import { reorderBudgets } from '../db/mutations'
@@ -12,9 +13,10 @@ import type { Budget } from '../db/schema'
 interface BudgetsProps {
   createOpen: boolean
   onCreateOpenChange: (open: boolean) => void
+  onOpenSettings: () => void
 }
 
-export function Budgets({ createOpen, onCreateOpenChange }: BudgetsProps) {
+export function Budgets({ createOpen, onCreateOpenChange, onOpenSettings }: BudgetsProps) {
   const statuses = useOrderedBudgetStatuses()
   const [editing, setEditing] = useState<Budget | null>(null)
   const [draftOrder, setDraftOrder] = useState<string[] | null>(null)
@@ -118,6 +120,8 @@ export function Budgets({ createOpen, onCreateOpenChange }: BudgetsProps) {
           New
         </button>
       </header>
+
+      <SyncAlertBar onInspect={onOpenSettings} />
 
       <div className="space-y-3 px-4">
         {statuses.length === 0 ? (

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BudgetHero } from '../components/BudgetHero'
 import { SyncDot } from '../components/SyncDot'
+import { SyncAlertBar } from '../components/SyncAlertBar'
 import { ExpenseDetailSheet } from './ExpenseDetailSheet'
 import { BudgetPickerSheet } from './BudgetPickerSheet'
 import { useBudgetStatuses, useCategoryMap, usePrimaryBudget, useTimeline } from '../db/queries'
@@ -48,6 +49,8 @@ export function Timeline({ onCreateBudget, onOpenSettings }: TimelineProps) {
           </svg>
         </button>
       </header>
+
+      <SyncAlertBar onInspect={onOpenSettings} />
 
       <div className="px-4">
         {primary ? (
