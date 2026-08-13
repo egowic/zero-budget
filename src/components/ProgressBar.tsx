@@ -6,6 +6,8 @@ interface ProgressBarProps {
   paceMarker?: number
   /** Optional label shown in its own lane above the pace marker. */
   paceLabel?: string
+  /** Fixed label rendered inside the track, independently of the fill width. */
+  valueLabel?: string
   height?: number
 }
 
@@ -14,6 +16,7 @@ export function ProgressBar({
   color,
   paceMarker,
   paceLabel,
+  valueLabel,
   height = 6,
 }: ProgressBarProps) {
   const filled = Math.min(100, Math.max(0, percent))
@@ -52,9 +55,25 @@ export function ProgressBar({
               : undefined,
           }}
         />
+        {valueLabel && (
+          <>
+            <span className="pointer-events-none absolute inset-y-0 left-2 z-10 flex items-center whitespace-nowrap text-[10px] leading-none font-semibold text-muted">
+              {valueLabel}
+            </span>
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 z-20 overflow-hidden rounded-full transition-[width] duration-500 ease-out"
+              style={{ width: `${filled}%` }}
+              aria-hidden
+            >
+              <span className="absolute inset-y-0 left-2 flex items-center whitespace-nowrap text-[10px] leading-none font-semibold text-black/75">
+                {valueLabel}
+              </span>
+            </div>
+          </>
+        )}
         {marker !== undefined && (paceLabel || (marker > 1 && marker < 99)) && (
           <div
-            className="absolute top-0 h-full w-px bg-white/35"
+            className="absolute top-0 z-30 h-full w-px bg-white/35"
             style={{ left: `clamp(1px, ${marker}%, calc(100% - 1px))` }}
             aria-hidden
           />

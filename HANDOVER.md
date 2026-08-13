@@ -257,14 +257,17 @@ Safari sekmesinde hem de mevcut Ana Ekran PWA'sında gerçek cihaz testi yapılm
 - Activity ve Budgets progress bar'larında aktif bütçenin pace çizgisi üzerinde
   minimal `Today` etiketi bulunur. Etiket için barın üstünde ayrı 13 px alan ayrılır
   ve yatay konumu kart kenarları içinde clamp edilir; tutar/yüzde satırlarıyla
-  çakışmaz. Upcoming ve ended bütçelerde etiket gösterilmez. Harcanan yüzde barın
-  içine taşınmadı; mevcut spent/total satırının sağında kaldı.
+  çakışmaz. Upcoming ve ended bütçelerde etiket gösterilmez. Harcanan yüzde daha
+  sonra metadata satırından çıkarılıp 18 px yüksekliğindeki progress bar'ın içine,
+  soldan 8 px'e sabit biçimde taşındı. Dolu ve boş alan için üst üste iki kontrast
+  katmanı kullanıldığı için yüzde çok düşükken bile etiket okunabilir kalır.
 - Activity'deki seçili budget kartının yapısı ve budget-switch davranışı korunarak
   görsel ölçeği Budgets kartlarına yaklaştırıldı: ana kalan tutar 42 px'ten 28 px'e,
   günlük limit ve kalan zaman değerleri 22 px'ten 16 px'e indirildi; dikey aralıklar
   hafifçe sıkılaştırıldı.
-- Bu geliştirmeler yalnızca web/PWA reposuna yapıldı; ayrı native iOS repo bu
-  iterasyonda değiştirilmedi.
+- Kart ölçeği, sıralama tutamacı ve `Today` geliştirmeleri native iOS reposuna da
+  taşındı. Yüzdeyi progress bar içine alan son değişiklik şu anda yalnızca web/PWA
+  reposundadır; kullanıcı görünümü onaylarsa native'e ayrıca aktarılmalıdır.
 
 ## 4. Mevcut veri ve sync mimarisi
 

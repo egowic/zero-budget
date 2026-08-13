@@ -242,12 +242,9 @@ function BudgetCard({
         </span>
       </div>
 
-      <div className="mt-1 flex items-center justify-between gap-3 text-[12.5px] text-faint">
+      <div className="mt-1 text-[12.5px] text-faint">
         <span>
           {formatMoney(status.spent)} spent of {formatMoney(budget.amount)}
-        </span>
-        <span className="tnum shrink-0" style={{ color }}>
-          {formatPercentUsed(percentUsed)}
         </span>
       </div>
 
@@ -257,6 +254,8 @@ function BudgetCard({
           color={color}
           paceMarker={percentTime * 100}
           paceLabel={phase === 'active' ? 'Today' : undefined}
+          valueLabel={formatPercentUsed(percentUsed)}
+          height={18}
         />
       </div>
 
