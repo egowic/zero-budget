@@ -368,23 +368,22 @@ Kullanıcı için manuel JSON export/restore mevcut:
 1. **Otomatik harici backup yok.** Uzun yıllar kullanım hedefi için haftalık
    veya aylık Supabase dump'ının Supabase dışındaki bir konuma şifreli olarak
    alınması önerilir.
-2. **Sync arızası yeterince belirgin değil.** Saatler/günler süren pending veya
-   error durumu için görünür bir uyarı ve gerçek hata detayı eklenebilir.
+2. **Uygulama dışı sync alarmı yok.** Settings güncel hata metnini, başlangıç
+   zamanını ve pending sayısını gösteriyor; ancak uygulama açılmadan uzun süren
+   arızayı bildiren push/e-posta uyarısı bulunmuyor.
 
 ### Orta öncelik
 
-3. **`README.md` güncel değil.** Hâlâ anonim giriş ve recovery email mimarisini
-   anlatıyor. Mevcut zorunlu e-posta login modeline göre düzeltilmeli.
-4. **Tombstone retention tasarımı yok.** Database gerçekten büyürse eski
+3. **Tombstone retention tasarımı yok.** Database gerçekten büyürse eski
    tombstone'ları güvenle temizlemek için cihaz-aware bir protokol gerekir.
-5. **Kapasite alarmı yok.** Database boyutu belirli eşiklere ulaştığında haber
+4. **Kapasite alarmı yok.** Database boyutu belirli eşiklere ulaştığında haber
    veren bir kontrol eklenebilir; şu anda acil değildir.
 
 ### Düşük öncelik
 
-6. iOS 27 beta standalone safe-area çözümü gerçek cihaz görüntülerine göre
+5. iOS 27 beta standalone safe-area çözümü gerçek cihaz görüntülerine göre
    ayarlandı; farklı iPhone/iOS sürümlerinde otomatik görsel test yoktur.
-7. Sync conflict ekranı yoktur; tek kullanıcı ve az cihaz varsayımıyla
+6. Sync conflict ekranı yoktur; tek kullanıcı ve az cihaz varsayımıyla
    last-write-wins kullanılır.
 
 ## 7. Geliştirme ve doğrulama komutları
