@@ -30,10 +30,14 @@ export function SettingsSheet({
   const status = useSyncStatus()
   const [notice, setNotice] = useState<string | null>(null)
   const [signingOut, setSigningOut] = useState(false)
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (open) setNotice(null)
+    if (open) {
+      setNotice(null)
+      setConfirmingSignOut(false)
+    }
   }, [open])
 
   async function handleRestore(file: File) {
@@ -75,7 +79,7 @@ export function SettingsSheet({
               <button
                 type="button"
                 onClick={() => void sync()}
-                className="ml-auto text-[12.5px] text-faint active:text-muted"
+                className="ml-auto text-[12.5px] font-medium text-muted active:text-text"
               >
                 Sync now
               </button>
@@ -98,15 +102,37 @@ export function SettingsSheet({
                   <div className="text-[13px] text-muted">Signed in</div>
                   <div className="truncate text-[12px] text-faint">{accountEmail}</div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  disabled={signingOut || status.pending > 0 || status.state === 'syncing'}
-                  className="ml-auto shrink-0 text-[12.5px] text-over disabled:text-faint"
-                >
-                  {signingOut ? 'Logging out…' : 'Log out'}
-                </button>
+                {!confirmingSignOut && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingSignOut(true)}
+                    disabled={status.pending > 0 || status.state === 'syncing'}
+                    className="ml-auto shrink-0 text-[12.5px] text-over disabled:text-faint"
+                  >
+                    Log out
+                  </button>
+                )}
               </div>
+              {confirmingSignOut && (
+                <div className="mt-3 flex items-center gap-2 border-t border-hairline pt-3">
+                  <span className="mr-auto text-[12.5px] text-muted">Are you sure?</span>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingSignOut(false)}
+                    className="rounded-full bg-surface-3 px-3 py-1.5 text-[12.5px] text-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    disabled={signingOut}
+                    className="rounded-full bg-over px-3 py-1.5 text-[12.5px] font-medium text-ink"
+                  >
+                    {signingOut ? 'Logging out…' : 'Log out'}
+                  </button>
+                </div>
+              )}
               <p className="mt-2 text-[11.5px] leading-relaxed text-faint">
                 Your local data stays on this phone. Log back into this account to
                 resume syncing.
