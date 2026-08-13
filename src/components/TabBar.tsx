@@ -13,7 +13,7 @@ interface TabBarProps {
  */
 export function TabBar({ tab, onTabChange, onAdd }: TabBarProps) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40">
+    <nav className="app-tabbar fixed inset-x-0 bottom-0 z-40">
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ink via-ink/92 to-transparent" />
 
       <div className="safe-bottom relative flex items-center justify-around px-8 pt-2 pb-2">

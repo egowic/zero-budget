@@ -122,6 +122,9 @@
   .ios-clipped-standalone .safe-bottom.pb-4 {
     padding-bottom: 1rem;
   }
+  .ios-clipped-standalone .app-tabbar .safe-bottom.pb-2 {
+    padding-bottom: 0;
+  }
 
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
