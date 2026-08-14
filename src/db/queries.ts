@@ -129,30 +129,39 @@ export interface DayGroup {
   expenses: Expense[]
 }
 
-/** Expenses grouped by calendar day, newest first. */
-export function useTimeline(limitDays = 60): DayGroup[] {
+/**
+ * Expenses grouped by calendar day within one calendar month, newest day
+ * first. Scoped to a month rather than "last N days with activity" — an
+ * unscoped feed keeps growing as history accumulates and eventually mixes
+ * spending from unrelated months in one scroll.
+ */
+export function useTimelineMonth(monthStart: IsoDate, monthEnd: IsoDate): DayGroup[] {
   return (
-    useLiveQuery(async () => {
-      const rows = await db.expenses.where('deleted').equals(0).reverse().sortBy('date')
+    useLiveQuery(
+      async () => {
+        const rows = await db.expenses.where('date').between(monthStart, monthEnd, true, true).toArray()
 
-      const groups = new Map<IsoDate, DayGroup>()
-      for (const expense of rows) {
-        let group = groups.get(expense.date)
-        if (!group) {
-          if (groups.size >= limitDays) break
-          group = { date: expense.date, total: 0, expenses: [] }
-          groups.set(expense.date, group)
+        const groups = new Map<IsoDate, DayGroup>()
+        for (const expense of rows) {
+          if (expense.deleted) continue
+          let group = groups.get(expense.date)
+          if (!group) {
+            group = { date: expense.date, total: 0, expenses: [] }
+            groups.set(expense.date, group)
+          }
+          group.total += expense.amount
+          group.expenses.push(expense)
         }
-        group.total += expense.amount
-        group.expenses.push(expense)
-      }
 
-      for (const group of groups.values()) {
-        // Newest entry of the day on top, matching the day ordering
-        group.expenses.sort((a, b) => b.createdAt - a.createdAt)
-      }
-      return [...groups.values()]
-    }, [limitDays], [] as DayGroup[]) ?? []
+        for (const group of groups.values()) {
+          // Newest entry of the day on top, matching the day ordering
+          group.expenses.sort((a, b) => b.createdAt - a.createdAt)
+        }
+        return [...groups.values()].sort((a, b) => (a.date < b.date ? 1 : -1))
+      },
+      [monthStart, monthEnd],
+      [] as DayGroup[],
+    ) ?? []
   )
 }
 

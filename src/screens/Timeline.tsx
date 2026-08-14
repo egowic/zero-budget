@@ -1,13 +1,25 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { BudgetHero } from '../components/BudgetHero'
 import { SyncDot } from '../components/SyncDot'
 import { SyncAlertBar } from '../components/SyncAlertBar'
 import { ExpenseDetailSheet } from './ExpenseDetailSheet'
 import { BudgetPickerSheet } from './BudgetPickerSheet'
-import { useBudgetStatuses, useCategoryMap, usePrimaryBudget, useTimeline } from '../db/queries'
+import {
+  useBudgetStatuses,
+  useCategoryMap,
+  usePrimaryBudget,
+  useTimelineMonth,
+} from '../db/queries'
 import type { DayGroup } from '../db/queries'
 import type { Expense } from '../db/schema'
-import { formatDayHeader } from '../lib/dates'
+import {
+  addMonths,
+  formatDayHeader,
+  formatMonth,
+  isSameMonth,
+  monthBounds,
+  today,
+} from '../lib/dates'
 import { formatMoney } from '../lib/money'
 
 interface TimelineProps {
@@ -18,8 +30,14 @@ interface TimelineProps {
 export function Timeline({ onCreateBudget, onOpenSettings }: TimelineProps) {
   const primary = usePrimaryBudget()
   const allBudgets = useBudgetStatuses()
-  const days = useTimeline()
   const categories = useCategoryMap()
+
+  // Defaults to the current month on every load; browsing away from it does
+  // not persist, so the app always opens on "what's happening now."
+  const [monthCursor, setMonthCursor] = useState(today)
+  const { start, end } = useMemo(() => monthBounds(monthCursor), [monthCursor])
+  const days = useTimelineMonth(start, end)
+  const isCurrentMonth = isSameMonth(monthCursor, today())
 
   const [selected, setSelected] = useState<Expense | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -63,10 +81,17 @@ export function Timeline({ onCreateBudget, onOpenSettings }: TimelineProps) {
         )}
       </div>
 
+      <MonthNav
+        monthCursor={monthCursor}
+        atCurrentMonth={isCurrentMonth}
+        onPrev={() => setMonthCursor((m) => addMonths(m, -1))}
+        onNext={() => setMonthCursor((m) => addMonths(m, 1))}
+      />
+
       {days.length === 0 ? (
-        <EmptyTimeline />
+        <EmptyTimeline currentMonth={isCurrentMonth} monthLabel={formatMonth(monthCursor)} />
       ) : (
-        <div className="mt-7">
+        <div className="mt-3">
           {days.map((day, index) => (
             <DaySection
               key={day.date}
@@ -163,6 +188,59 @@ function DaySection({
   )
 }
 
+function MonthNav({
+  monthCursor,
+  atCurrentMonth,
+  onPrev,
+  onNext,
+}: {
+  monthCursor: string
+  atCurrentMonth: boolean
+  onPrev: () => void
+  onNext: () => void
+}) {
+  return (
+    <div className="mt-6 flex items-center justify-between px-4">
+      <button
+        type="button"
+        onClick={onPrev}
+        aria-label="Previous month"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-faint active:bg-surface-2"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path
+            d="M15 18l-6-6 6-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+
+      <span className="text-[13.5px] font-medium text-text">{formatMonth(monthCursor)}</span>
+
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={atCurrentMonth}
+        aria-label="Next month"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-faint disabled:opacity-30 active:bg-surface-2"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path
+            d="M9 6l6 6-6 6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 function EmptyBudget({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="rounded-[var(--radius-card)] border border-dashed border-hairline-strong px-5 py-8 text-center">
@@ -181,11 +259,23 @@ function EmptyBudget({ onCreate }: { onCreate: () => void }) {
   )
 }
 
-function EmptyTimeline() {
+function EmptyTimeline({
+  currentMonth,
+  monthLabel,
+}: {
+  currentMonth: boolean
+  monthLabel: string
+}) {
   return (
-    <div className="px-4 pt-16 text-center">
+    <div className="px-4 pt-14 text-center">
       <p className="text-[13.5px] text-faint">
-        Tap <span className="text-muted">+</span> to add your first expense.
+        {currentMonth ? (
+          <>
+            Tap <span className="text-muted">+</span> to add your first expense.
+          </>
+        ) : (
+          `No expenses in ${monthLabel}.`
+        )}
       </p>
     </div>
   )

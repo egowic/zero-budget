@@ -83,6 +83,26 @@ export function formatDayHeader(iso: IsoDate): string {
   return formatDate(iso)
 }
 
+/** First and last calendar day of the month containing `iso`. */
+export function monthBounds(iso: IsoDate): { start: IsoDate; end: IsoDate } {
+  const date = fromIso(iso)
+  return {
+    start: toIso(new Date(date.getFullYear(), date.getMonth(), 1)),
+    end: toIso(new Date(date.getFullYear(), date.getMonth() + 1, 0)),
+  }
+}
+
+/** "August 2026" */
+export function formatMonth(iso: IsoDate): string {
+  const date = fromIso(iso)
+  return `${MONTHS[date.getMonth()]} ${date.getFullYear()}`
+}
+
+/** True when both dates fall in the same calendar month and year. */
+export function isSameMonth(a: IsoDate, b: IsoDate): boolean {
+  return a.slice(0, 7) === b.slice(0, 7)
+}
+
 /** "Jul 27 – Aug 26" for compact budget ranges. */
 export function formatRange(start: IsoDate, end: IsoDate): string {
   const s = fromIso(start)
