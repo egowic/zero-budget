@@ -44,8 +44,13 @@ export function ProgressBar({
         aria-valuemin={0}
         aria-valuemax={100}
       >
+        {/* Square right edge on purpose. The track's own rounding still caps
+            the left end, but a rounded leading edge makes the fill look like
+            it stops short of wherever it actually lands — which defeats the
+            one thing the pace marker exists for: reading them against each
+            other at a glance. */}
         <div
-          className="h-full rounded-full transition-[width] duration-500 ease-out"
+          className="h-full transition-[width] duration-500 ease-out"
           style={{
             width: `${filled}%`,
             background: color,
@@ -61,7 +66,7 @@ export function ProgressBar({
               {valueLabel}
             </span>
             <div
-              className="pointer-events-none absolute inset-y-0 left-0 z-20 overflow-hidden rounded-full transition-[width] duration-500 ease-out"
+              className="pointer-events-none absolute inset-y-0 left-0 z-20 overflow-hidden transition-[width] duration-500 ease-out"
               style={{ width: `${filled}%` }}
               aria-hidden
             >
