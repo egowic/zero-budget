@@ -166,6 +166,12 @@ export function useTimelineMonth(monthStart: IsoDate, monthEnd: IsoDate): DayGro
 }
 
 export interface CategorySlice {
+  /**
+   * Identity of the slice, independent of whether the category itself has
+   * loaded yet. `category` is still null on the first render — keying a list
+   * off it would give every slice the same key and leave stale rows on screen.
+   */
+  categoryId: string | null
   category: Category | null
   total: Minor
   share: number
@@ -199,6 +205,7 @@ export function useCategoryBreakdown(
         const byId = new Map(categories.map((c) => [c.id, c]))
         return [...totals.entries()]
           .map(([key, total]) => ({
+            categoryId: key || null,
             category: key ? (byId.get(key) ?? null) : null,
             total,
             share: total / grand,

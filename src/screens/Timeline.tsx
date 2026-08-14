@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { BudgetHero } from '../components/BudgetHero'
 import { SyncDot } from '../components/SyncDot'
 import { SyncAlertBar } from '../components/SyncAlertBar'
 import { ExpenseDetailSheet } from './ExpenseDetailSheet'
 import { BudgetPickerSheet } from './BudgetPickerSheet'
+import { MonthSummarySheet } from './MonthSummarySheet'
 import {
   useBudgetStatuses,
+  useCategoryBreakdown,
   useCategoryMap,
   usePrimaryBudget,
   useTimelineMonth,
@@ -20,7 +22,7 @@ import {
   monthBounds,
   today,
 } from '../lib/dates'
-import { formatMoney } from '../lib/money'
+import { formatMoney, type Minor } from '../lib/money'
 
 interface TimelineProps {
   onCreateBudget: () => void
@@ -37,13 +39,56 @@ export function Timeline({ onCreateBudget, onOpenSettings }: TimelineProps) {
   const [monthCursor, setMonthCursor] = useState(today)
   const { start, end } = useMemo(() => monthBounds(monthCursor), [monthCursor])
   const days = useTimelineMonth(start, end)
+  const slices = useCategoryBreakdown({ startDate: start, endDate: end })
   const isCurrentMonth = isSameMonth(monthCursor, today())
+
+  const monthTotal = slices.reduce((sum, slice) => sum + slice.total, 0)
 
   const [selected, setSelected] = useState<Expense | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [summaryOpen, setSummaryOpen] = useState(false)
+
+  const showPrevMonth = () => setMonthCursor((m) => addMonths(m, -1))
+  const showNextMonth = () => setMonthCursor((m) => addMonths(m, 1))
+
+  /**
+   * Swiping sideways changes month, matching the arrows.
+   *
+   * Decided entirely on touchend and never preventDefault-ed, so vertical
+   * scrolling is untouched: a gesture only counts once it has finished and
+   * proven itself clearly horizontal.
+   */
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+
+  const onTouchStart = (event: React.TouchEvent) => {
+    const touch = event.touches[0]
+    touchStart.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  const onTouchEnd = (event: React.TouchEvent) => {
+    const origin = touchStart.current
+    touchStart.current = null
+    // An open sheet sits inside this element, so its swipes bubble up here.
+    if (!origin || selected || pickerOpen || summaryOpen) return
+
+    const touch = event.changedTouches[0]
+    const dx = touch.clientX - origin.x
+    const dy = touch.clientY - origin.y
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+
+    if (dx < 0) {
+      if (!isCurrentMonth) showNextMonth()
+    } else {
+      showPrevMonth()
+    }
+  }
 
   return (
-    <div className="app-screen min-h-full pb-32">
+    <div
+      className="app-screen min-h-full pb-32"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <header className="app-header safe-top flex items-center justify-between px-4 pt-3 pb-4">
         <div className="flex items-center gap-2">
           <h1 className="text-[15px] font-semibold tracking-tight text-muted">Activity</h1>
@@ -84,14 +129,16 @@ export function Timeline({ onCreateBudget, onOpenSettings }: TimelineProps) {
       <MonthNav
         monthCursor={monthCursor}
         atCurrentMonth={isCurrentMonth}
-        onPrev={() => setMonthCursor((m) => addMonths(m, -1))}
-        onNext={() => setMonthCursor((m) => addMonths(m, 1))}
+        total={monthTotal}
+        onPrev={showPrevMonth}
+        onNext={showNextMonth}
+        onOpenSummary={() => setSummaryOpen(true)}
       />
 
       {days.length === 0 ? (
         <EmptyTimeline currentMonth={isCurrentMonth} monthLabel={formatMonth(monthCursor)} />
       ) : (
-        <div className="mt-3">
+        <div className="mt-4">
           {days.map((day, index) => (
             <DaySection
               key={day.date}
@@ -113,6 +160,12 @@ export function Timeline({ onCreateBudget, onOpenSettings }: TimelineProps) {
         onClose={() => setPickerOpen(false)}
         statuses={allBudgets}
         currentId={primary?.budget.id ?? null}
+      />
+      <MonthSummarySheet
+        open={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        slices={slices}
+        monthLabel={formatMonth(monthCursor)}
       />
     </div>
   )
@@ -191,13 +244,17 @@ function DaySection({
 function MonthNav({
   monthCursor,
   atCurrentMonth,
+  total,
   onPrev,
   onNext,
+  onOpenSummary,
 }: {
   monthCursor: string
   atCurrentMonth: boolean
+  total: Minor
   onPrev: () => void
   onNext: () => void
+  onOpenSummary: () => void
 }) {
   return (
     <div className="mt-6 flex items-center justify-between px-4">
@@ -218,7 +275,47 @@ function MonthNav({
         </svg>
       </button>
 
-      <span className="text-[13.5px] font-medium text-text">{formatMonth(monthCursor)}</span>
+      {/*
+        The total is the whole summary most days; the full split is one tap
+        away rather than permanently occupying the screen.
+
+        Stacked rather than inline so the month name is centred on its own and
+        cannot be nudged sideways by however wide the amount happens to be —
+        paging through months should not make the heading drift.
+      */}
+      <button
+        type="button"
+        onClick={onOpenSummary}
+        disabled={total === 0}
+        className="flex flex-col items-center gap-[3px] rounded-2xl px-3 py-1 active:bg-surface-2 disabled:active:bg-transparent"
+      >
+        <span className="text-[13.5px] font-medium text-text">
+          {formatMonth(monthCursor)}
+        </span>
+        {total > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="tnum text-[12px] leading-none text-faint">
+              {formatMoney(total)}
+            </span>
+            <svg
+              width="9"
+              height="9"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="text-faint"
+              aria-hidden
+            >
+              <path
+                d="m6 9 6 6 6-6"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+        )}
+      </button>
 
       <button
         type="button"
