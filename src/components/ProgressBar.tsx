@@ -78,8 +78,17 @@ export function ProgressBar({
         )}
         {marker !== undefined && (paceLabel || (marker > 1 && marker < 99)) && (
           <div
-            className="absolute top-0 z-30 h-full w-px bg-white/35"
-            style={{ left: `clamp(1px, ${marker}%, calc(100% - 1px))` }}
+            className="absolute top-0 z-30 h-full w-px"
+            style={{
+              left: `clamp(1px, ${marker}%, calc(100% - 1px))`,
+              /*
+               * Takes whichever colour the value label already uses at that
+               * point: dark once the marker is standing on the fill, light
+               * against the bare track. A single fixed colour has to survive
+               * both backgrounds and ends up barely legible on one of them.
+               */
+              background: marker <= filled ? 'rgba(0,0,0,0.75)' : 'var(--color-muted)',
+            }}
             aria-hidden
           />
         )}
