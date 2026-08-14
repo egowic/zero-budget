@@ -78,7 +78,10 @@ export function ProgressBar({
         )}
         {marker !== undefined && (paceLabel || (marker > 1 && marker < 99)) && (
           <div
-            className="absolute top-0 z-30 h-full w-px"
+            // Centred on the mark rather than starting at it: the pace is a
+            // point, so a line that sits entirely to one side of it reports a
+            // position it does not actually have.
+            className="absolute top-0 z-30 h-full w-[2px] -translate-x-1/2"
             style={{
               left: `clamp(1px, ${marker}%, calc(100% - 1px))`,
               /*
