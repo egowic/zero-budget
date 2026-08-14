@@ -15,6 +15,58 @@ export function useSyncStatus(): SyncStatus {
  */
 const QUIET_PERIOD_MS = 6 * 60 * 60 * 1000
 
+/**
+ * How long something has to be wrong before the dot appears at all.
+ *
+ * A healthy sync finishes well under a second, so nothing normal ever reaches
+ * this and the dot stays invisible in ordinary use. Five seconds rather than
+ * anything longer because this app is opened, used for a few seconds and
+ * closed again: a slower fuse would light up just as the phone is going back
+ * in a pocket, which amounts to never warning at all.
+ */
+const DOT_DELAY_MS = 5000
+
+/** 'warning' may still resolve on its own; 'critical' will not. */
+export type SyncDotTone = 'warning' | 'critical'
+
+/**
+ * Whether the status dot has earned its place on screen.
+ *
+ * Returns null — meaning draw nothing — for every healthy state, including a
+ * sync that is currently running. A permanent light reporting "fine" trains
+ * you to watch it, so the only thing it reliably produces is the suspicion
+ * that something might be wrong. Silence is the healthy signal here; the dot
+ * exists purely to break it.
+ */
+export function buildSyncDot(status: SyncStatus, now = Date.now()): SyncDotTone | null {
+  switch (status.state) {
+    case 'disabled':
+    case 'idle':
+      return null
+
+    // In flight is not a problem. Still in flight after five seconds is.
+    case 'syncing':
+      return now - status.stateSince < DOT_DELAY_MS ? null : 'warning'
+
+    case 'offline':
+      if (status.pending === 0) return null
+      return now - status.stateSince < DOT_DELAY_MS ? null : 'critical'
+
+    case 'error': {
+      // The persisted clock, so an outage that predates this launch is not
+      // granted a fresh grace period every time the app opens.
+      const stuckFor = status.failingSince === null ? 0 : now - status.failingSince
+      if (stuckFor < DOT_DELAY_MS) return null
+      // A signed-out or unreachable backend is broken whether or not anything
+      // is queued. Network trouble with nothing waiting has risked no data.
+      if (status.errorKind === 'auth' || status.errorKind === 'unavailable') {
+        return 'critical'
+      }
+      return status.pending > 0 ? 'critical' : null
+    }
+  }
+}
+
 export interface SyncAlert {
   /** 'critical' never resolves on its own; 'warning' still might. */
   tone: 'critical' | 'warning'

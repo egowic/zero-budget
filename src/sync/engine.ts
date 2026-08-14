@@ -41,6 +41,12 @@ export interface SyncStatus {
    * outage would look brand new every single morning.
    */
   failingSince: number | null
+  /**
+   * When `state` last changed. Lets the UI tell a sync that is merely in
+   * flight from one that has been in flight long enough to be worth
+   * mentioning — the difference between working and stuck.
+   */
+  stateSince: number
 }
 
 type Table = 'budgets' | 'expenses' | 'categories'
@@ -58,11 +64,20 @@ let status: SyncStatus = {
   pending: 0,
   lastSyncedAt: null,
   failingSince: null,
+  stateSince: Date.now(),
 }
 const listeners = new Set<() => void>()
 
 function setStatus(patch: Partial<SyncStatus>) {
-  status = { ...status, ...patch }
+  // Only a genuine change of state restarts the clock. Re-reporting the same
+  // state — a retry that fails the same way again — must not make a long
+  // outage look like it just began.
+  const entersNewState = patch.state !== undefined && patch.state !== status.state
+  status = {
+    ...status,
+    ...patch,
+    ...(entersNewState ? { stateSince: Date.now() } : {}),
+  }
   for (const listener of listeners) listener()
 }
 

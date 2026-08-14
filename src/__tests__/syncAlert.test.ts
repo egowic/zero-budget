@@ -12,6 +12,7 @@ function status(over: Partial<SyncStatus> = {}): SyncStatus {
     pending: 0,
     lastSyncedAt: NOW,
     failingSince: null,
+    stateSince: NOW,
     ...over,
   }
 }
