@@ -48,9 +48,11 @@ export function buildSyncDot(status: SyncStatus, now = Date.now()): SyncDotTone 
     case 'syncing':
       return now - status.stateSince < DOT_DELAY_MS ? null : 'warning'
 
+    // A connection comes back on its own, so this is amber however long it
+    // lasts — the red is reserved for the failures that never self-heal.
     case 'offline':
       if (status.pending === 0) return null
-      return now - status.stateSince < DOT_DELAY_MS ? null : 'critical'
+      return now - status.stateSince < DOT_DELAY_MS ? null : 'warning'
 
     case 'error': {
       // The persisted clock, so an outage that predates this launch is not
@@ -58,11 +60,12 @@ export function buildSyncDot(status: SyncStatus, now = Date.now()): SyncDotTone 
       const stuckFor = status.failingSince === null ? 0 : now - status.failingSince
       if (stuckFor < DOT_DELAY_MS) return null
       // A signed-out or unreachable backend is broken whether or not anything
-      // is queued. Network trouble with nothing waiting has risked no data.
+      // is queued, and no amount of waiting mends either.
       if (status.errorKind === 'auth' || status.errorKind === 'unavailable') {
         return 'critical'
       }
-      return status.pending > 0 ? 'critical' : null
+      // Network trouble with nothing waiting has risked no data at all.
+      return status.pending > 0 ? 'warning' : null
     }
   }
 }

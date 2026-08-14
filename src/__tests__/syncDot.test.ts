@@ -85,20 +85,34 @@ describe('when the status dot shows itself', () => {
     expect(buildSyncDot(blip, NOW)).toBeNull()
   })
 
-  it('reports network trouble once local changes are waiting on it', () => {
+  it('reports network trouble as amber once local changes wait on it', () => {
+    // Amber, not red: a connection returns on its own, unlike a dead session
     const risky = status({
       state: 'error',
       errorKind: 'network',
       failingSince: NOW - 60 * SECOND,
       pending: 1,
     })
-    expect(buildSyncDot(risky, NOW)).toBe('critical')
+    expect(buildSyncDot(risky, NOW)).toBe('warning')
   })
 
   it('treats an unknown failure the same way as a network one', () => {
     const base = { state: 'error' as const, errorKind: 'unknown' as const, failingSince: NOW - 60 * SECOND }
     expect(buildSyncDot(status({ ...base, pending: 0 }), NOW)).toBeNull()
-    expect(buildSyncDot(status({ ...base, pending: 2 }), NOW)).toBe('critical')
+    expect(buildSyncDot(status({ ...base, pending: 2 }), NOW)).toBe('warning')
+  })
+
+  it('never uses red for anything that can heal by itself', () => {
+    // The tones carry a promise: red means waiting will not fix this
+    const selfHealing: Partial<SyncStatus>[] = [
+      { state: 'syncing', stateSince: NOW - 60 * SECOND },
+      { state: 'offline', pending: 4, stateSince: NOW - 60 * SECOND },
+      { state: 'error', errorKind: 'network', failingSince: NOW - 60 * SECOND, pending: 4 },
+      { state: 'error', errorKind: 'unknown', failingSince: NOW - 60 * SECOND, pending: 4 },
+    ]
+    for (const over of selfHealing) {
+      expect(buildSyncDot(status(over), NOW)).not.toBe('critical')
+    }
   })
 
   it('says nothing about being offline when everything is already backed up', () => {
@@ -108,7 +122,7 @@ describe('when the status dot shows itself', () => {
 
   it('reports being offline once changes are stranded on this phone', () => {
     const stranded = status({ state: 'offline', pending: 2, stateSince: NOW - 6 * SECOND })
-    expect(buildSyncDot(stranded, NOW)).toBe('critical')
+    expect(buildSyncDot(stranded, NOW)).toBe('warning')
 
     const justWentOffline = status({ state: 'offline', pending: 2, stateSince: NOW - SECOND })
     expect(buildSyncDot(justWentOffline, NOW)).toBeNull()
